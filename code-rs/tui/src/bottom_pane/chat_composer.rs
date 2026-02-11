@@ -28,7 +28,12 @@ use crate::clipboard_paste::normalize_pasted_path;
 use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::clipboard_paste::try_decode_base64_image_to_temp_png;
 use code_file_search::FileMatch;
+use rand::Rng;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::cell::RefCell;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -184,6 +189,131 @@ pub(crate) struct ChatComposer {
     render_mode: ComposerRenderMode,
     auto_drive_active: bool,
     auto_drive_style: Option<ComposerStyle>,
+    status_text_overrides: Option<StatusTextOverrides>,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+struct StatusTextConfigFile {
+    #[serde(default)]
+    groups: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    status_groups: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct StatusTextOverrides {
+    groups: HashMap<String, Vec<String>>,
+    status_groups: HashMap<String, String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StatusCategory {
+    AutoReview,
+    AutoDriveGoal,
+    AutoDrive,
+    Thinking,
+    Tools,
+    Browsing,
+    Agents,
+    Responding,
+    Reconnecting,
+    Coding,
+    Reading,
+    Working,
+}
+
+impl StatusCategory {
+    fn key(self) -> &'static str {
+        match self {
+            StatusCategory::AutoReview => "auto_review",
+            StatusCategory::AutoDriveGoal => "auto_drive_goal",
+            StatusCategory::AutoDrive => "auto_drive",
+            StatusCategory::Thinking => "thinking",
+            StatusCategory::Tools => "tools",
+            StatusCategory::Browsing => "browsing",
+            StatusCategory::Agents => "agents",
+            StatusCategory::Responding => "responding",
+            StatusCategory::Reconnecting => "reconnecting",
+            StatusCategory::Coding => "coding",
+            StatusCategory::Reading => "reading",
+            StatusCategory::Working => "working",
+        }
+    }
+}
+
+impl StatusTextOverrides {
+    fn from_file(path: &Path) -> Option<Self> {
+        let contents = match std::fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(_) => return None,
+        };
+
+        let parsed: StatusTextConfigFile = match serde_json::from_str(&contents) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::warn!(
+                    "failed to parse status_texts.json at {}: {error}",
+                    path.display()
+                );
+                return None;
+            }
+        };
+
+        let groups = parsed
+            .groups
+            .into_iter()
+            .map(|(name, values)| {
+                let cleaned = values
+                    .into_iter()
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .collect::<Vec<_>>();
+                (name.trim().to_ascii_lowercase(), cleaned)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let status_groups = parsed
+            .status_groups
+            .into_iter()
+            .map(|(status, group)| {
+                (
+                    status.trim().to_ascii_lowercase(),
+                    group.trim().to_ascii_lowercase(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        Some(Self {
+            groups,
+            status_groups,
+        })
+    }
+
+    fn pick_for(&self, category: StatusCategory) -> Option<String> {
+        let category_key = category.key().to_string();
+
+        let group_name = self
+            .status_groups
+            .get(&category_key)
+            .cloned()
+            .or_else(|| self.status_groups.get("all").cloned())
+            .or_else(|| {
+                if self.groups.contains_key("all") {
+                    Some("all".to_string())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(category_key);
+
+        let values = self.groups.get(&group_name)?;
+        if values.is_empty() {
+            return None;
+        }
+
+        let idx = rand::rng().random_range(0..values.len());
+        values.get(idx).cloned()
+    }
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -204,8 +334,12 @@ impl ChatComposer {
         app_event_tx: AppEventSender,
         enhanced_keys_supported: bool,
         using_chatgpt_auth: bool,
+        code_home: Option<PathBuf>,
     ) -> Self {
         let use_shift_enter_hint = enhanced_keys_supported;
+        let status_text_overrides = code_home
+            .as_deref()
+            .and_then(|home| StatusTextOverrides::from_file(&home.join("status_texts.json")));
 
         Self {
             textarea: TextArea::new(),
@@ -248,6 +382,7 @@ impl ChatComposer {
             render_mode: ComposerRenderMode::Full,
             auto_drive_active: false,
             auto_drive_style: None,
+            status_text_overrides,
         }
     }
 
@@ -363,7 +498,12 @@ impl ChatComposer {
     }
 
     pub fn update_status_message(&mut self, message: String) {
-        self.status_message = Self::map_status_message(&message);
+        let (category, fallback) = Self::classify_status_message(&message);
+        self.status_message = self
+            .status_text_overrides
+            .as_ref()
+            .and_then(|overrides| overrides.pick_for(category))
+            .unwrap_or(fallback);
     }
 
     pub fn status_message(&self) -> Option<&str> {
@@ -460,9 +600,9 @@ impl ChatComposer {
     }
 
     // Map technical status messages to user-friendly ones
-    pub(crate) fn map_status_message(technical_message: &str) -> String {
+    fn classify_status_message(technical_message: &str) -> (StatusCategory, String) {
         if technical_message.trim().is_empty() {
-            return String::new();
+            return (StatusCategory::Working, String::new());
         }
 
         let lower = technical_message.to_lowercase();
@@ -472,14 +612,14 @@ impl ChatComposer {
         if lower.contains("auto review") {
             let cleaned = technical_message.trim();
             if cleaned.is_empty() {
-                "Auto Review".to_string()
+                (StatusCategory::AutoReview, "Auto Review".to_string())
             } else {
-                cleaned.to_string()
+                (StatusCategory::AutoReview, cleaned.to_string())
             }
         } else if lower.contains("auto drive goal") {
-            "Auto Drive Goal".to_string()
+            (StatusCategory::AutoDriveGoal, "Auto Drive Goal".to_string())
         } else if lower.contains("auto drive") {
-            "Auto Drive".to_string()
+            (StatusCategory::AutoDrive, "Auto Drive".to_string())
         }
         // Thinking/reasoning patterns
         else if lower.contains("reasoning")
@@ -488,7 +628,7 @@ impl ChatComposer {
             || lower.contains("waiting for model")
             || lower.contains("model")
         {
-            "Thinking".to_string()
+            (StatusCategory::Thinking, "Thinking".to_string())
         }
         // Tool/command execution patterns
         else if lower.contains("tool")
@@ -498,7 +638,7 @@ impl ChatComposer {
             || lower.contains("bash")
             || lower.contains("shell")
         {
-            "Using tools".to_string()
+            (StatusCategory::Tools, "Using tools".to_string())
         }
         // Browser activity
         else if lower.contains("browser")
@@ -508,7 +648,7 @@ impl ChatComposer {
             || lower.contains("url")
             || lower.contains("screenshot")
         {
-            "Browsing".to_string()
+            (StatusCategory::Browsing, "Browsing".to_string())
         }
         // Multi-agent orchestration
         else if lower.contains("agent")
@@ -516,7 +656,7 @@ impl ChatComposer {
             || lower.contains("orchestrating")
             || lower.contains("coordinating")
         {
-            "Agents".to_string()
+            (StatusCategory::Agents, "Agents".to_string())
         }
         // Response generation patterns
         else if lower.contains("generating")
@@ -527,7 +667,7 @@ impl ChatComposer {
             || lower.contains("chat completions")
             || lower.contains("completion")
         {
-            "Responding".to_string()
+            (StatusCategory::Responding, "Responding".to_string())
         }
         // Transient network/stream retry patterns → keep spinner visible with a
         // clear reconnecting message so the user knows we are still working.
@@ -541,7 +681,7 @@ impl ChatComposer {
             || lower.contains("network")
             || lower.contains("connection")
         {
-            "Reconnecting".to_string()
+            (StatusCategory::Reconnecting, "Reconnecting".to_string())
         }
         // File/code editing patterns
         else if lower.contains("editing")
@@ -551,17 +691,22 @@ impl ChatComposer {
             || lower.contains("updating")
             || lower.contains("patch")
         {
-            "Coding".to_string()
+            (StatusCategory::Coding, "Coding".to_string())
         }
         // Catch some common technical terms
         else if lower.contains("processing") || lower.contains("analyzing") {
-            "Thinking".to_string()
+            (StatusCategory::Thinking, "Thinking".to_string())
         } else if lower.contains("reading") || lower.contains("searching") {
-            "Reading".to_string()
+            (StatusCategory::Reading, "Reading".to_string())
         } else {
             // Default fallback - use "working" for unknown status
-            "Working".to_string()
+            (StatusCategory::Working, "Working".to_string())
         }
+    }
+
+    pub(crate) fn map_status_message(technical_message: &str) -> String {
+        let (_, mapped) = Self::classify_status_message(technical_message);
+        mapped
     }
 
     pub fn desired_height(&self, width: u16) -> u16 {
@@ -2875,8 +3020,7 @@ impl WidgetRef for ChatComposer {
                         format!(" {}... ", self.status_message),
                         Style::default().fg(crate::colors::info()),
                     ),
-                ])
-                .centered();
+                ]);
                 input_block = input_block.title(title_line);
             }
         }
@@ -3017,7 +3161,7 @@ mod tests {
     fn auto_review_status_stays_left_with_auto_drive_footer() {
         let (tx, _rx) = std::sync::mpsc::channel::<AppEvent>();
         let app_tx = AppEventSender::new(tx);
-        let mut composer = ChatComposer::new(true, app_tx, true, false);
+        let mut composer = ChatComposer::new(true, app_tx, true, false, None);
 
         composer.auto_drive_active = true;
         composer.standard_terminal_hint = Some("Esc stop\tCtrl+S settings".to_string());

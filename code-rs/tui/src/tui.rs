@@ -55,7 +55,8 @@ impl std::fmt::Debug for TerminalInfo {
 
 /// Initialize the terminal (full screen mode with alternate screen)
 pub fn init(config: &Config) -> Result<(Tui, TerminalInfo)> {
-    // Load file-backed theme catalog (`~/.code/themes`) and seed bundled
+    // Load file-backed theme catalog (`<code_home>/themes`, default
+    // `~/.magic/themes`) and seed bundled
     // presets/GPT samples before resolving the active theme.
     crate::theme::initialize_theme_file_catalog();
     // Initialize the theme based on config

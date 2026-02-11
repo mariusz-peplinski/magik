@@ -6434,6 +6434,7 @@ impl ChatWidget<'_> {
             enhanced_keys_supported,
             using_chatgpt_auth: config.using_chatgpt_auth,
             auto_drive_variant,
+            code_home: config.code_home.clone(),
         });
 
         let mut new_widget = Self {
@@ -6795,6 +6796,7 @@ impl ChatWidget<'_> {
             enhanced_keys_supported,
             using_chatgpt_auth: config.using_chatgpt_auth,
             auto_drive_variant,
+            code_home: config.code_home.clone(),
         });
 
         let mut w = Self {

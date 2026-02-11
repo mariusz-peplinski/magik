@@ -22,7 +22,7 @@
 - 🌐 **Browser Integration** – CDP support, headless browsing, screenshots captured inline.
 - 🤖 **Multi-agent commands** – `/plan`, `/code` and `/solve` coordinate multiple CLI agents.
 - 🧭 **Unified settings hub** – `/settings` overlay for limits, theming, approvals, and provider wiring.
-- 🎨 **Theme system** – Switch between accessible presets, customize accents, and preview live via `/themes`.
+- 🎨 **Theme system** – Switch between accessible presets, customize accents, and preview live via `/theme`.
 - 🔌 **MCP support** – Extend with filesystem, DBs, APIs, or your own tools.
 - 🔒 **Safety modes** – Read-only, approvals, and workspace sandboxing.
 
@@ -145,7 +145,7 @@ qwen --version
 ### General
 ```bash
 # Try a new theme!
-/themes
+/theme
 
 # Change reasoning level
 /reasoning low|medium|high
@@ -224,7 +224,7 @@ Every Code supports MCP for extended capabilities:
 - **API integrations**: Connect to external services
 - **Custom tools**: Build your own extensions
 
-Configure MCP in `~/.code/config.toml` Define each server under a named table like `[mcp_servers.<name>]` (this maps to the JSON `mcpServers` object used by other clients):
+Configure MCP in `~/.magic/config.toml` (or `CODE_HOME/config.toml`) and define each server under a named table like `[mcp_servers.<name>]` (this maps to the JSON `mcpServers` object used by other clients):
 
 ```toml
 [mcp_servers.filesystem]
@@ -235,10 +235,10 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/project"]
 &ensp;
 ## Configuration
 
-Main config file: `~/.code/config.toml`
+Main config file: `~/.magic/config.toml`
 
 > [!NOTE]
-> Every Code reads from both `~/.code/` and `~/.codex/` for backwards compatibility, but it only writes updates to `~/.code/`. If you switch back to Codex and it fails to start, remove `~/.codex/config.toml`. If Every Code appears to miss settings after upgrading, copy your legacy `~/.codex/config.toml` into `~/.code/`.
+> Every Code defaults to `~/.magic/` for config/state. You can override that with `CODE_HOME` (or `CODEX_HOME`). For backwards compatibility, when no home override is set and a file is missing in `~/.magic/`, Code may read the legacy `~/.codex/` copy. Writes go to the resolved Code home.
 
 ```toml
 # Model settings
@@ -254,8 +254,8 @@ sandbox_mode = "workspace-write"
 [tui.theme]
 name = "light-photon"
 
-# Optional: file-backed themes loaded at startup and shown in /themes.
-# Create files in ~/.code/themes/*.toml with keys:
+# Optional: file-backed themes loaded at startup and shown in /theme.
+# Create files in ~/.magic/themes/*.toml (or $CODE_HOME/themes/*.toml) with keys:
 # id, name, description, is_dark, and [colors].
 
 # Add config for specific models
@@ -270,6 +270,7 @@ model_reasoning_summary = "detailed"
 ### Environment variables
 
 - `CODE_HOME`: Override config directory location
+- `CODEX_HOME`: Legacy alias for overriding config directory location
 - `OPENAI_API_KEY`: Use API key instead of ChatGPT auth
 - `OPENAI_BASE_URL`: Use OpenAI-compatible API endpoints (chat or responses)
 - `OPENAI_WIRE_API`: Force the built-in OpenAI provider to use `chat` or `responses` wiring
@@ -281,7 +282,7 @@ model_reasoning_summary = "detailed"
 > This fork adds browser integration, multi-agent commands (`/plan`, `/solve`, `/code`), theme system, and enhanced reasoning controls while maintaining full compatibility.
 
 **Can I use my existing Codex configuration?**
-> Yes. Every Code reads from both `~/.code/` (primary) and legacy `~/.codex/` directories. We only write to `~/.code/`, so Codex will keep running if you switch back; copy or remove legacy files if you notice conflicts.
+> Yes. Every Code uses `~/.magic/` by default and can still read legacy `~/.codex/` files when the new location is missing data. New writes go to `~/.magic/` (or your `CODE_HOME`/`CODEX_HOME` override).
 
 **Does this work with ChatGPT Plus?**
 > Absolutely. Use the same "Sign in with ChatGPT" flow as the original.
@@ -344,7 +345,7 @@ Using OpenAI, Anthropic or Google services through Every Code means you agree to
 - If you configure other model providers, you're responsible for their terms.
 
 ### Privacy
-- Your auth file lives at `~/.code/auth.json`
+- Your auth file lives at `~/.magic/auth.json` by default (or under `CODE_HOME`/`CODEX_HOME`)
 - Inputs/outputs you send to AI providers are handled under their Terms and Privacy Policy; consult those documents (and any org-level data-sharing settings).
 
 ### Subject to change

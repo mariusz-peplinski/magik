@@ -169,6 +169,7 @@ Notes:
 | Path | Responsibility | Tags |
 |---|---|---|
 | `code-rs/core/src/config_types.rs` (`ThemeConfig`, `ThemeName`, `ThemeColors`) | Theme configuration schema, built-in theme catalog names, custom color fields | `protocol`, `ui` |
+| `code-rs/core/src/theme_files.rs` | File-backed theme catalog storage/loading (`<code_home>/themes`) and TOML serialization | `runtime`, `ui` |
 | `code-rs/tui/src/theme.rs` | Theme state, built-in theme resolution, custom overrides, ANSI16/ANSI256 mapping | `ui` |
 | `code-rs/tui/src/colors.rs` | Canonical color getters consumed across widgets | `ui` |
 | `code-rs/tui/src/bottom_pane/theme_selection_view.rs` | Theme picker UI in settings overlay | `ui` |
@@ -181,6 +182,11 @@ Theme catalog currently includes light, dark, ANSI16, and custom variants:
 - Dark: `dark-carbon-night`, `dark-shinobi-dusk`, `dark-oled-black-pro`, `dark-amber-terminal`, `dark-aurora-flux`, `dark-charcoal-rainbow`, `dark-zen-garden`, `dark-paper-light-pro`
 - ANSI16 fallbacks: `light-photon-ansi16`, `dark-carbon-ansi16`
 - Custom: `custom`
+
+Theme storage notes:
+- Theme files are loaded from `<code_home>/themes` (default `~/.magic/themes`).
+- `code_home` resolution order is `CODE_HOME`, then `CODEX_HOME`, then `~/.magic`.
+- With no env override, read paths can fall back to legacy `~/.codex` when a default-path file is missing; writes target `<code_home>`.
 
 ### Startup/welcome and motion effects
 

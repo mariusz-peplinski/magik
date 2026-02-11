@@ -157,6 +157,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) using_chatgpt_auth: bool,
     pub(crate) auto_drive_variant: AutoDriveVariant,
+    pub(crate) code_home: std::path::PathBuf,
 }
 
 impl BottomPane<'_> {
@@ -169,6 +170,7 @@ impl BottomPane<'_> {
             params.app_event_tx.clone(),
             enhanced_keys_supported,
             params.using_chatgpt_auth,
+            Some(params.code_home.clone()),
         );
 
         Self {

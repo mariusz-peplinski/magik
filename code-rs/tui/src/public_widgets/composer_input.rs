@@ -38,7 +38,7 @@ impl ComposerInput {
         let (tx, rx) = std::sync::mpsc::channel();
         let sender = AppEventSender::new(tx.clone());
         // `enhanced_keys_supported=true` enables Shift+Enter newline hint/behavior.
-        let inner = ChatComposer::new(true, sender, true, false);
+        let inner = ChatComposer::new(true, sender, true, false, None);
         Self { inner, _tx: tx, rx }
     }
 

@@ -19,6 +19,10 @@ const SMALL_MIN_HEIGHT: u16 = 19;
 const LARGE_VERSION_COLUMN: usize = 65;
 const MEDIUM_VERSION_COLUMN: usize = 43;
 const ANIMATED_CHARS: &[char] = &['█'];
+const HOT_PINK: Color = Color::Rgb(255, 20, 147);
+const NEON_PINK: Color = Color::Rgb(255, 16, 240);
+const PINK: Color = Color::Rgb(255, 64, 180);
+const LIGHT_PINK: Color = Color::Rgb(255, 182, 219);
 
 pub fn intro_art_size_for_width(width: u16) -> IntroArtSize {
     if width >= LARGE_MIN_WIDTH {
@@ -169,104 +173,57 @@ fn welcome_lines(size: IntroArtSize, version: &str) -> Vec<String> {
     }
 }
 
-const LARGE_VERSION_LINE: &str = "   ███████╗ ╚████╔╝ ███████╗██║  ██║   ██║";
-const LARGE_BODY_TAIL: [&str; 22] = [
-    "      █████████╗        █████████╗     ████████████╗     ███████████████╗",
-    "      █████████║        █████████║     ████████████║     ███████████████║",
-    "      █████████║        █████████║     ████████████║     ███████████████║",
-    "   ███╔════════███╗  ███╔════════███╗  ███╔════════███╗  ███╔═══════════╝",
-    "   ███║        ███║  ███║        ███║  ███║        ███║  ███║",
-    "   ███║        ███║  ███║        ███║  ███║        ███║  ███║",
-    "   ███║        ╚══╝  ███║        ███║  ███║        ███║  ███║",
-    "   ███║              ███║        ███║  ███║        ███║  ███║",
-    "   ███║              ███║        ███║  ███║        ███║  ███║",
-    "   ███║              ███║        ███║  ███║        ███║  ███████████████╗",
-    "   ███║              ███║        ███║  ███║        ███║  ███████████████║",
-    "   ███║              ███║        ███║  ███║        ███║  ███████████████║",
-    "   ███║              ███║        ███║  ███║        ███║  ███╔═══════════╝",
-    "   ███║              ███║        ███║  ███║        ███║  ███║",
-    "   ███║              ███║        ███║  ███║        ███║  ███║",
-    "   ███║        ███╗  ███║        ███║  ███║        ███║  ███║",
-    "   ███║        ███║  ███║        ███║  ███║        ███║  ███║",
-    "   ███║        ███║  ███║        ███║  ███║        ███║  ███║",
-    "   ╚══█████████╔══╝  ╚══█████████╔══╝  ████████████╔══╝  ███████████████╗",
-    "      █████████║        █████████║     ████████████║     ███████████████║",
-    "      █████████║        █████████║     ████████████║     ███████████████║",
-    "      ╚════════╝        ╚════════╝      ╚══════════╝      ╚═════════════╝",
-];
-
+const LARGE_VERSION_LINE: &str = "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗";
 fn large_welcome_lines(version: &str) -> Vec<String> {
     let mut animated = vec![
-        "   ███████╗██╗   ██╗███████╗██████╗ ██╗   ██╗".to_string(),
-        "   ██╔════╝██║   ██║██╔════╝██╔══██╗╚██╗ ██╔╝".to_string(),
-        "   █████╗  ██║   ██║█████╗  ██████╔╝ ╚████╔╝".to_string(),
-        "   ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██╔══██╗  ╚██╔╝".to_string(),
+        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
+        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
+        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
+        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
     ];
 
     let base_width = LARGE_VERSION_LINE.chars().count();
     let padding = LARGE_VERSION_COLUMN.saturating_sub(base_width);
     let _version_pad = " ".repeat(padding);
-    let footer_line = "   ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝";
+    let footer_line = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝";
     let footer_len = footer_line.chars().count();
     let footer_pad = LARGE_VERSION_COLUMN.saturating_sub(footer_len);
     let footer_version_pad = " ".repeat(footer_pad);
     animated.push(format!("{LARGE_VERSION_LINE}{footer_version_pad}{version}"));
     animated.push(footer_line.to_string());
-    animated.extend(LARGE_BODY_TAIL.iter().map(|line| (*line).to_string()));
 
     shift_left(animated, 3)
 }
 
-const MEDIUM_VERSION_LINE: &str = "   ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝ ";
-const MEDIUM_BODY_TAIL: [&str; 15] = [
-    "     ██████╗     ██████╗   ████████╗   ██████████╗",
-    "     ██████║     ██████║   ████████║   ██████████║",
-    "   ██╔═════██╗ ██╔═════██╗ ██╔═════██╗ ██╔═══════╝",
-    "   ██║     ██║ ██║     ██║ ██║     ██║ ██║",
-    "   ██║     ╚═╝ ██║     ██║ ██║     ██║ ██║",
-    "   ██║         ██║     ██║ ██║     ██║ ██║",
-    "   ██║         ██║     ██║ ██║     ██║ ██████████╗",
-    "   ██║         ██║     ██║ ██║     ██║ ██████████║",
-    "   ██║         ██║     ██║ ██║     ██║ ██╔═══════╝",
-    "   ██║         ██║     ██║ ██║     ██║ ██║",
-    "   ██║     ██╗ ██║     ██║ ██║     ██║ ██║",
-    "   ██║     ██║ ██║     ██║ ██║     ██║ ██║",
-    "   ╚═██████╔═╝ ╚═██████╔═╝ ████████╔═╝ ██████████╗",
-    "     ██████║     ██████║   ████████║   ██████████║",
-    "     ╚═════╝     ╚═════╝   ╚═══════╝   ╚═════════╝",
-];
-
+const MEDIUM_VERSION_LINE: &str = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝ ";
 fn medium_welcome_lines(version: &str) -> Vec<String> {
     let mut animated = vec![
-        "   ███████╗██╗   ██╗███████╗██████╗ ██╗   ██╗".to_string(),
-        "   ██╔════╝██║   ██║██╔════╝██╔══██╗╚██╗ ██╔╝".to_string(),
-        "   █████╗  ██║   ██║█████╗  ██████╔╝ ╚████╔╝".to_string(),
-        "   ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██╔══██╗  ╚██╔╝".to_string(),
-        "   ███████╗ ╚████╔╝ ███████╗██║  ██║   ██║".to_string(),
+        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
+        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
+        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
+        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
+        "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗".to_string(),
     ];
 
     let base_width = MEDIUM_VERSION_LINE.chars().count();
     let padding = MEDIUM_VERSION_COLUMN.saturating_sub(base_width);
     let _version_pad = " ".repeat(padding);
-    if let Some(first_tail) = MEDIUM_BODY_TAIL.first() {
-        let tail_len = first_tail.chars().count();
-        let tail_pad = MEDIUM_VERSION_COLUMN.saturating_sub(tail_len);
-        let tail_version_pad = " ".repeat(tail_pad);
-        animated.push(format!("{MEDIUM_VERSION_LINE}{tail_version_pad}{version}  "));
-        animated.extend(MEDIUM_BODY_TAIL.iter().map(|line| (*line).to_string()));
-    }
+    let base_len = MEDIUM_VERSION_LINE.chars().count();
+    let base_pad = MEDIUM_VERSION_COLUMN.saturating_sub(base_len);
+    let version_pad = " ".repeat(base_pad);
+    animated.push(format!("{MEDIUM_VERSION_LINE}{version_pad}{version}  "));
     shift_left(animated, 3)
 }
 
-const SMALL_VERSION_LINE: &str = "   ╚═════╝  ╚═══╝  ╚═════╝╚═╝  ╚═╝   ╚═╝  ";
+const SMALL_VERSION_LINE: &str = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝  ";
 
 fn small_welcome_lines(version: &str) -> Vec<String> {
     let mut lines = vec![
-        "   ██████╗██╗   ██╗██████╗██████╗ ██╗   ██╗".to_string(),
-        "   ██╔═══╝██║   ██║██╔═══╝██╔══██╗╚██╗ ██╔╝".to_string(),
-        "   █████╗ ██║   ██║█████╗ ██████╔╝ ╚████╔╝".to_string(),
-        "   ██╔══╝ ╚██╗ ██╔╝██╔══╝ ██╔══██╗  ╚██╔╝".to_string(),
-        "   ██████╗ ╚████╔╝ ██████╗██║  ██║   ██║".to_string(),
+        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
+        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
+        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
+        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
+        "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗".to_string(),
     ];
 
     let base_width = SMALL_VERSION_LINE.chars().count();
@@ -274,35 +231,18 @@ fn small_welcome_lines(version: &str) -> Vec<String> {
     let pad = " ".repeat(padding);
     lines.push(format!("{SMALL_VERSION_LINE}{pad}{version}  "));
 
-    let tail = [
-        "     ██████╗     ██████╗   ████████╗   ██████████╗",
-        "     ██████║     ██████║   ████████║   ██████████║",
-        "   ██╔═════██╗ ██╔═════██╗ ██╔═════██╗ ██╔═══════╝",
-        "   ██║     ██║ ██║     ██║ ██║     ██║ ██║",
-        "   ██║     ╚═╝ ██║     ██║ ██║     ██║ ██║",
-        "   ██║         ██║     ██║ ██║     ██║ ██████████╗",
-        "   ██║         ██║     ██║ ██║     ██║ ██████████║",
-        "   ██║         ██║     ██║ ██║     ██║ ██╔═══════╝",
-        "   ██║     ██╗ ██║     ██║ ██║     ██║ ██║",
-        "   ██║     ██║ ██║     ██║ ██║     ██║ ██║",
-        "   ╚═██████╔═╝ ╚═██████╔═╝ ████████╔═╝ ██████████╗",
-        "     ██████║     ██████║   ████████║   ██████████║",
-        "     ╚═════╝     ╚═════╝   ╚═══════╝   ╚═════════╝",
-    ];
-    lines.extend(tail.iter().map(|l| (*l).to_string()));
-
     shift_left(lines, 3)
 }
 
 fn tiny_welcome_lines(version: &str) -> Vec<String> {
     vec![
-        format!("EVERY                 {version}    "),
-        " █████╗ █████╗ █████╗ ██████╗         ".to_string(),
-        "██╔═══╝██╔══██╗██╔═██╗██╔═══╝         ".to_string(),
-        "██║    ██║  ██║██║ ██║████╗           ".to_string(),
-        "██║    ██║  ██║██║ ██║██╔═╝           ".to_string(),
-        "╚█████╗╚█████╔╝█████╔╝██████╗         ".to_string(),
-        " ╚════╝ ╚════╝ ╚════╝ ╚═════╝         ".to_string(),
+        format!("MAGIC                 {version}    "),
+        " ███╗   ███╗  █████╗   ██████╗ ██╗    ".to_string(),
+        " ████╗ ████║ ██╔══██╗ ██╔════╝ ██║    ".to_string(),
+        " ██╔████╔██║ ███████║ ██║  ███╗██║    ".to_string(),
+        " ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║    ".to_string(),
+        " ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║    ".to_string(),
+        " ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝    ".to_string(),
     ]
 }
 
@@ -362,7 +302,7 @@ fn render_static_lines(
     _frame: u32,
     reveal_x_shadow: isize,
 ) {
-    let static_target = Color::Rgb(230, 232, 235); // matches CODE/EVERY final color (#e6e8eb)
+    let static_target = HOT_PINK;
     let static_color_base = blend_to_background(static_target, alpha);
     for (row_idx, line) in lines.iter().enumerate() {
         let y = area.y + row_idx as u16;
@@ -418,19 +358,19 @@ fn render_overlay_lines(
             let mut color = Color::Reset;
 
             if mask[y][x] && xi <= reveal_x_fill {
-                let base = gradient_multi(x as f32 / (w.max(1) as f32));
+                let base = intro_gradient_pink(x as f32 / (w.max(1) as f32));
                 let dx = (xi - shine_x).abs();
                 let shine =
                     (1.0 - (dx as f32 / (shine_band as f32 + 0.001)).clamp(0.0, 1.0)).powf(1.6);
                 let bright = bump_rgb(base, shine * 0.30);
-                color = mix_rgb(bright, Color::Rgb(230, 232, 235), fade);
+                color = mix_rgb(bright, HOT_PINK, fade);
                 draw = true;
             } else if border[y][x] && xi <= reveal_x_outline.max(reveal_x_fill) {
-                let base = gradient_multi(x as f32 / (w.max(1) as f32));
+                let base = intro_gradient_pink(x as f32 / (w.max(1) as f32));
                 let period = 8usize;
                 let on = ((x + y + (frame as usize)) % period) < (period / 2);
                 let c = if on { bump_rgb(base, 0.22) } else { base };
-                color = mix_rgb(c, Color::Rgb(235, 237, 240), fade * 0.8);
+                color = mix_rgb(c, LIGHT_PINK, fade * 0.8);
                 draw = true;
             }
 
@@ -477,19 +417,19 @@ fn render_overlay_lines_with_alpha(
             let mut color = Color::Reset;
 
             if mask[y][x] && xi <= reveal_x_fill {
-                let base = gradient_multi(x as f32 / (w.max(1) as f32));
+                let base = intro_gradient_pink(x as f32 / (w.max(1) as f32));
                 let dx = (xi - shine_x).abs();
                 let shine =
                     (1.0 - (dx as f32 / (shine_band as f32 + 0.001)).clamp(0.0, 1.0)).powf(1.6);
                 let bright = bump_rgb(base, shine * 0.30);
-                color = blend_to_background(mix_rgb(bright, Color::Rgb(230, 232, 235), fade), alpha);
+                color = blend_to_background(mix_rgb(bright, HOT_PINK, fade), alpha);
                 draw = true;
             } else if border[y][x] && xi <= reveal_x_outline.max(reveal_x_fill) {
-                let base = gradient_multi(x as f32 / (w.max(1) as f32));
+                let base = intro_gradient_pink(x as f32 / (w.max(1) as f32));
                 let period = 8usize;
                 let on = ((x + y + (frame as usize)) % period) < (period / 2);
                 let c = if on { bump_rgb(base, 0.22) } else { base };
-                color = blend_to_background(mix_rgb(c, Color::Rgb(235, 237, 240), fade * 0.8), alpha);
+                color = blend_to_background(mix_rgb(c, LIGHT_PINK, fade * 0.8), alpha);
                 draw = true;
             }
 
@@ -598,6 +538,17 @@ pub(crate) fn gradient_multi(t: f32) -> Color {
     }
 }
 
+fn intro_gradient_pink(t: f32) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    if t < (1.0 / 3.0) {
+        mix_rgb(HOT_PINK, NEON_PINK, t * 3.0)
+    } else if t < (2.0 / 3.0) {
+        mix_rgb(NEON_PINK, LIGHT_PINK, (t - 1.0 / 3.0) * 3.0)
+    } else {
+        mix_rgb(LIGHT_PINK, PINK, (t - 2.0 / 3.0) * 3.0)
+    }
+}
+
 fn bump_rgb(c: Color, amt: f32) -> Color {
     match c {
         Color::Rgb(r, g, b) => {
@@ -611,14 +562,13 @@ fn bump_rgb(c: Color, amt: f32) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use indoc::indoc;
     use ratatui::buffer::Buffer;
     use ratatui::prelude::Rect;
 
     #[test]
     fn renders_large_art_pixel_perfect() {
         let version = format!("v{}", code_version::version());
-        let expected = expected_large(&version);
+        let expected = welcome_lines(IntroArtSize::Large, &version);
         let width = expected.iter().map(|l| l.chars().count()).max().unwrap() as u16;
         let height = expected.len() as u16;
         let rect = Rect::new(0, 0, width, height);
@@ -641,7 +591,7 @@ mod tests {
     #[test]
     fn renders_medium_art_pixel_perfect() {
         let version = format!("v{}", code_version::version());
-        let expected = expected_medium(&version);
+        let expected = welcome_lines(IntroArtSize::Medium, &version);
         let width = expected.iter().map(|l| l.chars().count()).max().unwrap() as u16;
         let height = expected.len() as u16;
         let rect = Rect::new(0, 0, width, height);
@@ -664,9 +614,10 @@ mod tests {
     #[test]
     fn renders_small_art_pixel_perfect() {
         let version = format!("v{}", code_version::version());
-        let expected = vec!["██████╗██╗   ██╗█".to_string()];
-        let width = expected[0].chars().count() as u16;
-        let rect = Rect::new(0, 0, width, 1);
+        let expected = welcome_lines(IntroArtSize::Small, &version);
+        let width = expected.iter().map(|l| l.chars().count()).max().unwrap() as u16;
+        let height = expected.len() as u16;
+        let rect = Rect::new(0, 0, width, height);
         let mut buf = Buffer::empty(rect);
 
         render_intro_animation_with_size_and_alpha_offset(
@@ -702,70 +653,5 @@ mod tests {
             .into_iter()
             .map(|line| line.trim_end().to_string())
             .collect()
-    }
-
-    fn expected_large(version: &str) -> Vec<String> {
-        let art = indoc! {"
-           ███████╗██╗   ██╗███████╗██████╗ ██╗   ██╗
-           ██╔════╝██║   ██║██╔════╝██╔══██╗╚██╗ ██╔╝
-           █████╗  ██║   ██║█████╗  ██████╔╝ ╚████╔╝
-           ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██╔══██╗  ╚██╔╝
-           ███████╗ ╚████╔╝ ███████╗██║  ██║   ██║                       {VERSION}
-           ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝
-              █████████╗        █████████╗     ████████████╗     ███████████████╗
-              █████████║        █████████║     ████████████║     ███████████████║
-              █████████║        █████████║     ████████████║     ███████████████║
-           ███╔════════███╗  ███╔════════███╗  ███╔════════███╗  ███╔═══════════╝
-           ███║        ███║  ███║        ███║  ███║        ███║  ███║
-           ███║        ███║  ███║        ███║  ███║        ███║  ███║
-           ███║        ╚══╝  ███║        ███║  ███║        ███║  ███║
-           ███║              ███║        ███║  ███║        ███║  ███║
-           ███║              ███║        ███║  ███║        ███║  ███║
-           ███║              ███║        ███║  ███║        ███║  ███████████████╗
-           ███║              ███║        ███║  ███║        ███║  ███████████████║
-           ███║              ███║        ███║  ███║        ███║  ███████████████║
-           ███║              ███║        ███║  ███║        ███║  ███╔═══════════╝
-           ███║              ███║        ███║  ███║        ███║  ███║
-           ███║              ███║        ███║  ███║        ███║  ███║
-           ███║        ███╗  ███║        ███║  ███║        ███║  ███║
-           ███║        ███║  ███║        ███║  ███║        ███║  ███║
-           ███║        ███║  ███║        ███║  ███║        ███║  ███║
-           ╚══█████████╔══╝  ╚══█████████╔══╝  ████████████╔══╝  ███████████████╗
-              █████████║        █████████║     ████████████║     ███████████████║
-              █████████║        █████████║     ████████████║     ███████████████║
-              ╚════════╝        ╚════════╝      ╚══════════╝      ╚═════════════╝
-        "}
-        .replace("{VERSION}", version);
-
-        art.lines().map(|line| line.to_string()).collect()
-    }
-
-    fn expected_medium(version: &str) -> Vec<String> {
-        let art = indoc! {"
-           ███████╗██╗   ██╗███████╗██████╗ ██╗   ██╗
-           ██╔════╝██║   ██║██╔════╝██╔══██╗╚██╗ ██╔╝
-           █████╗  ██║   ██║█████╗  ██████╔╝ ╚████╔╝
-           ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██╔══██╗  ╚██╔╝
-           ███████╗ ╚████╔╝ ███████╗██║  ██║   ██║
-           ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝ {VERSION}  
-             ██████╗     ██████╗   ████████╗   ██████████╗
-             ██████║     ██████║   ████████║   ██████████║
-           ██╔═════██╗ ██╔═════██╗ ██╔═════██╗ ██╔═══════╝
-           ██║     ██║ ██║     ██║ ██║     ██║ ██║
-           ██║     ╚═╝ ██║     ██║ ██║     ██║ ██║
-           ██║         ██║     ██║ ██║     ██║ ██║
-           ██║         ██║     ██║ ██║     ██║ ██████████╗
-           ██║         ██║     ██║ ██║     ██║ ██████████║
-           ██║         ██║     ██║ ██║     ██║ ██╔═══════╝
-           ██║         ██║     ██║ ██║     ██║ ██║
-           ██║     ██╗ ██║     ██║ ██║     ██║ ██║
-           ██║     ██║ ██║     ██║ ██║     ██║ ██║
-           ╚═██████╔═╝ ╚═██████╔═╝ ████████╔═╝ ██████████╗
-             ██████║     ██████║   ████████║   ██████████║
-             ╚═════╝     ╚═════╝   ╚═══════╝   ╚═════════╝
-        "}
-        .replace("{VERSION}", version);
-
-        art.lines().map(|line| line.to_string()).collect()
     }
 }

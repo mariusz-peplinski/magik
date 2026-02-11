@@ -43,6 +43,18 @@ When debugging regressions or bugs, write a failing test (or targeted reproducti
   `CLAUDE.md` is a symlink to `AGENTS.md`; updating `AGENTS.md` updates the
   effective agent guidance across all three filenames.
 
+## Code Home And Themes
+
+- `code_core::config::find_code_home()` resolves in this order: `CODE_HOME`,
+  then `CODEX_HOME`, then default `~/.magic`.
+- File-backed themes live at `<code_home>/themes` (default
+  `~/.magic/themes`).
+- Active theme settings persist to `<code_home>/config.toml` under
+  `[tui.theme]`.
+- When no env override is set, read paths can fall back to legacy `~/.codex`
+  files if the default path is missing; writes still target the resolved
+  `code_home`.
+
 ## Strict Ordering In The TUI History
 
 The TUI enforces strict, per‑turn ordering for all streamed content. Every

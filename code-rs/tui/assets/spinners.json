@@ -244,5 +244,47 @@
       "frames": ["+","x","*"],
       "label": "Cross Sparkle"
     }
+  },
+  "GPT": {
+    "gptPulseCore": {
+      "interval": 90,
+      "frames": ["◉","◎","◍","◎"],
+      "label": "GPT Pulse Core"
+    },
+    "gptNeonFlip": {
+      "interval": 85,
+      "frames": ["◢","◣","◤","◥"],
+      "label": "GPT Neon Flip"
+    },
+    "gptWaveTrail": {
+      "interval": 95,
+      "frames": ["▁▂▃▄","▂▃▄▅","▃▄▅▆","▄▅▆▇","▅▆▇█","▄▅▆▇","▃▄▅▆","▂▃▄▅"],
+      "label": "GPT Wave Trail"
+    },
+    "gptOrbit": {
+      "interval": 80,
+      "frames": ["◐","◓","◑","◒"],
+      "label": "GPT Orbit"
+    },
+    "gptPixelRain": {
+      "interval": 100,
+      "frames": ["░▒▓","▒▓░","▓░▒","▒░▓"],
+      "label": "GPT Pixel Rain"
+    },
+    "gptSignal": {
+      "interval": 110,
+      "frames": ["▱▱▱","▰▱▱","▰▰▱","▰▰▰","▱▰▰","▱▱▰"],
+      "label": "GPT Signal"
+    },
+    "gptComet": {
+      "interval": 90,
+      "frames": ["☄   "," ☄  ","  ☄ ","   ☄","  ☄ "," ☄  "],
+      "label": "GPT Comet"
+    },
+    "gptHeartbeat": {
+      "interval": 105,
+      "frames": ["♥··","♥♥·","♥♥♥","♥♥·"],
+      "label": "GPT Heartbeat"
+    }
   }
 }
