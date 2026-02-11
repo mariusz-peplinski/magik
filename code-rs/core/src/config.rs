@@ -84,6 +84,8 @@ pub use sources::{
     set_review_resolve_model,
     set_tui_alternate_screen,
     set_tui_auto_review_enabled,
+    set_tui_show_block_type_labels,
+    set_tui_show_reasoning,
     set_tui_git_snapshots_enabled,
     set_tui_notifications,
     set_tui_review_auto_resolve,
@@ -396,6 +398,9 @@ pub struct Config {
     /// ChatGPT account is rate/usage limited.
     pub api_key_fallback_on_all_accounts_limited: bool,
 
+    /// Strategy for picking which account to use when auto-switching is enabled.
+    pub account_switching_mode: crate::config_types::AccountSwitchingMode,
+
     /// GitHub integration configuration.
     pub github: GithubConfig,
 
@@ -660,6 +665,10 @@ pub struct ConfigToml {
     /// ChatGPT account is rate/usage limited.
     #[serde(default)]
     pub api_key_fallback_on_all_accounts_limited: Option<bool>,
+
+    /// Strategy for picking which account to use when auto-switching is enabled.
+    #[serde(default)]
+    pub account_switching_mode: Option<crate::config_types::AccountSwitchingMode>,
 
     /// Nested tools section for feature toggles
     pub tools: Option<ToolsToml>,
@@ -1083,6 +1092,11 @@ impl Config {
             .or(cfg.api_key_fallback_on_all_accounts_limited)
             .unwrap_or(false);
 
+        let account_switching_mode = config_profile
+            .account_switching_mode
+            .or(cfg.account_switching_mode)
+            .unwrap_or_default();
+
         let default_model_slug = if using_chatgpt_auth {
             GPT_5_CODEX_MEDIUM_MODEL
         } else {
@@ -1458,6 +1472,7 @@ impl Config {
             using_chatgpt_auth,
             auto_switch_accounts_on_rate_limit,
             api_key_fallback_on_all_accounts_limited,
+            account_switching_mode,
             github: cfg.github.unwrap_or_default(),
             validation: cfg.validation.unwrap_or_default(),
             subagent_commands: cfg

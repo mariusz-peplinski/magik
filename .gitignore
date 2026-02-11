@@ -149,6 +149,10 @@ branches/
 # coder directories
 .coder/
 .code/
+.magic/
+
+# local scratch notes
+SUGG.md
 
 # trigger: test non-notes change (no [skip ci])
 

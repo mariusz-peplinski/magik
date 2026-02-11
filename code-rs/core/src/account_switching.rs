@@ -8,6 +8,7 @@ use code_app_server_protocol::AuthMode;
 use crate::auth;
 use crate::account_usage;
 use crate::auth_accounts;
+use crate::config_types::AccountSwitchingMode;
 
 #[derive(Debug, Default)]
 pub struct RateLimitSwitchState {
@@ -85,6 +86,16 @@ fn usage_used_percent(snapshot: &account_usage::StoredRateLimitSnapshot) -> Opti
     }
 }
 
+fn usage_is_exhausted(snapshot: &account_usage::StoredRateLimitSnapshot) -> bool {
+    let Some(snapshot) = snapshot.snapshot.as_ref() else {
+        return false;
+    };
+    if !snapshot.primary_used_percent.is_finite() || !snapshot.secondary_used_percent.is_finite() {
+        return false;
+    }
+    snapshot.primary_used_percent >= 100.0 || snapshot.secondary_used_percent >= 100.0
+}
+
 fn is_blocked(now: DateTime<Utc>, blocked_until: Option<DateTime<Utc>>) -> bool {
     blocked_until.is_some_and(|until| until > now)
 }
@@ -93,6 +104,7 @@ pub(crate) fn select_next_account_id(
     code_home: &Path,
     state: &RateLimitSwitchState,
     allow_api_key_fallback: bool,
+    mode: AccountSwitchingMode,
     now: DateTime<Utc>,
     current_account_id: Option<&str>,
 ) -> io::Result<Option<String>> {
@@ -126,6 +138,7 @@ pub(crate) fn select_next_account_id(
     let current = current.as_deref();
 
     let mut best_chatgpt: Option<(&auth_accounts::StoredAccount, CandidateScore)> = None;
+    let mut best_reset_secs: Option<i64> = None;
     for account in &chatgpt_accounts {
         if current.is_some_and(|id| id == account.id) {
             continue;
@@ -143,18 +156,54 @@ pub(crate) fn select_next_account_id(
             continue;
         }
 
+        if snapshot_map
+            .get(&account.id)
+            .is_some_and(usage_is_exhausted)
+        {
+            continue;
+        }
+
         let used_percent = snapshot_map
             .get(&account.id)
             .and_then(usage_used_percent)
             .unwrap_or(0.0);
         let score = CandidateScore { used_percent };
-        match best_chatgpt {
-            None => best_chatgpt = Some((*account, score)),
-            Some((_, best_score)) => {
-                if score.used_percent < best_score.used_percent {
-                    best_chatgpt = Some((*account, score));
+
+        match mode {
+            AccountSwitchingMode::ResetBased => {
+                let reset_secs = snapshot_map
+                    .get(&account.id)
+                    .and_then(|snap| snap.primary_next_reset_at)
+                    .map(|reset_at| reset_at.signed_duration_since(now).num_seconds().max(0));
+                let reset_secs = reset_secs.unwrap_or(i64::MAX);
+                match (best_chatgpt, best_reset_secs) {
+                    (None, _) => {
+                        best_chatgpt = Some((*account, score));
+                        best_reset_secs = Some(reset_secs);
+                    }
+                    (Some((_, best_score)), Some(best_secs)) => {
+                        if reset_secs < best_secs
+                            || (reset_secs == best_secs
+                                && score.used_percent < best_score.used_percent)
+                        {
+                            best_chatgpt = Some((*account, score));
+                            best_reset_secs = Some(reset_secs);
+                        }
+                    }
+                    (Some(_), None) => {
+                        best_chatgpt = Some((*account, score));
+                        best_reset_secs = Some(reset_secs);
+                    }
                 }
             }
+            _ => match best_chatgpt {
+                None => best_chatgpt = Some((*account, score)),
+                Some((_, best_score)) => {
+                    if score.used_percent < best_score.used_percent {
+                        best_chatgpt = Some((*account, score));
+                    }
+                }
+            },
         }
     }
 
@@ -175,9 +224,12 @@ pub(crate) fn select_next_account_id(
             .chain(snapshot_map.get(&account.id).and_then(usage_reset_blocked_until))
             .max();
         let blocked = is_blocked(now, blocked_until);
+        let usage_exhausted = snapshot_map
+            .get(&account.id)
+            .is_some_and(usage_is_exhausted);
         let exhausted = state.limited_chatgpt_accounts.contains(&account.id);
         let tried = state.has_tried(&account.id);
-        blocked || (tried && exhausted)
+        blocked || usage_exhausted || (tried && exhausted)
     });
 
     if !chatgpt_accounts.is_empty() && !all_chatgpt_unavailable {
@@ -197,10 +249,192 @@ pub(crate) fn select_next_account_id(
     Ok(None)
 }
 
+fn preferred_even_usage_account_id(
+    candidates: &[(String, f64)],
+    current_account_id: Option<&str>,
+    delta_percent: f64,
+) -> Option<String> {
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let current = current_account_id?;
+    let current_used = candidates
+        .iter()
+        .find(|(id, _)| id == current)
+        .map(|(_, used)| *used);
+    let Some(current_used) = current_used else {
+        return None;
+    };
+
+    let min_other_used = candidates
+        .iter()
+        .filter(|(id, _)| id != current)
+        .map(|(_, used)| *used)
+        .reduce(f64::min);
+
+    let Some(min_other_used) = min_other_used else {
+        return None;
+    };
+
+    if current_used <= min_other_used + delta_percent {
+        return None;
+    }
+
+    candidates
+        .iter()
+        .min_by(|(a_id, a_used), (b_id, b_used)| {
+            a_used
+                .partial_cmp(b_used)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a_id.cmp(b_id))
+        })
+        .map(|(id, _)| id.clone())
+}
+
+fn preferred_step45_account_id(
+    candidates: &[(String, f64)],
+    current_account_id: Option<&str>,
+    step_percent: f64,
+) -> Option<String> {
+    if candidates.is_empty() {
+        return None;
+    }
+
+    if let Some(current) = current_account_id {
+        if let Some((_, used)) = candidates.iter().find(|(id, _)| id == current) {
+            let current_used = *used;
+            let steps = (current_used / step_percent).floor();
+            let mut next = (steps + 1.0) * step_percent;
+            if next > 100.0 {
+                next = 100.0;
+            }
+            if current_used < next {
+                return None;
+            }
+        }
+    }
+
+    candidates
+        .iter()
+        .min_by(|(a_id, a_used), (b_id, b_used)| {
+            a_used
+                .partial_cmp(b_used)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a_id.cmp(b_id))
+        })
+        .map(|(id, _)| id.clone())
+}
+
+fn preferred_reset_based_account_id(
+    candidates: &[(String, f64, Option<i64>)],
+) -> Option<String> {
+    candidates
+        .iter()
+        .min_by(|(a_id, a_used, a_reset), (b_id, b_used, b_reset)| {
+            let a_reset = a_reset.unwrap_or(i64::MAX);
+            let b_reset = b_reset.unwrap_or(i64::MAX);
+            a_reset
+                .cmp(&b_reset)
+                .then_with(|| {
+                    a_used
+                        .partial_cmp(b_used)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| a_id.cmp(b_id))
+        })
+        .map(|(id, _, _)| id.clone())
+}
+
+pub(crate) fn select_preferred_account_id(
+    code_home: &Path,
+    mode: AccountSwitchingMode,
+    allow_api_key_fallback: bool,
+    now: DateTime<Utc>,
+    current_account_id: Option<&str>,
+) -> io::Result<Option<String>> {
+    let accounts = auth_accounts::list_accounts(code_home)?;
+
+    let snapshots = account_usage::list_rate_limit_snapshots(code_home).unwrap_or_default();
+    let snapshot_map: HashMap<String, account_usage::StoredRateLimitSnapshot> = snapshots
+        .into_iter()
+        .map(|snap| (snap.account_id.clone(), snap))
+        .collect();
+
+    let mut chatgpt_candidates: Vec<(String, f64, Option<i64>)> = Vec::new();
+    let mut api_key_candidates: Vec<String> = Vec::new();
+    for acc in &accounts {
+        if !account_has_credentials(acc) {
+            continue;
+        }
+        match acc.mode {
+            AuthMode::ChatGPT | AuthMode::ChatgptAuthTokens => {
+                if snapshot_map.get(&acc.id).is_some_and(usage_is_exhausted) {
+                    continue;
+                }
+                let used = snapshot_map
+                    .get(&acc.id)
+                    .and_then(usage_used_percent)
+                    .unwrap_or(0.0);
+                let reset_secs = snapshot_map
+                    .get(&acc.id)
+                    .and_then(|snap| snap.primary_next_reset_at)
+                    .map(|reset_at| reset_at.signed_duration_since(now).num_seconds().max(0));
+                chatgpt_candidates.push((acc.id.clone(), used, reset_secs));
+            }
+            AuthMode::ApiKey => {
+                api_key_candidates.push(acc.id.clone());
+            }
+        }
+    }
+
+    chatgpt_candidates.sort_by(|(a_id, _, _), (b_id, _, _)| a_id.cmp(b_id));
+    api_key_candidates.sort();
+
+    let current = current_account_id;
+
+    let pick = match mode {
+        AccountSwitchingMode::OnLimit => None,
+        AccountSwitchingMode::EvenUsage => {
+            let flat: Vec<(String, f64)> = chatgpt_candidates
+                .iter()
+                .map(|(id, used, _)| (id.clone(), *used))
+                .collect();
+            preferred_even_usage_account_id(&flat, current, 10.0)
+        }
+        AccountSwitchingMode::Step45 => {
+            let flat: Vec<(String, f64)> = chatgpt_candidates
+                .iter()
+                .map(|(id, used, _)| (id.clone(), *used))
+                .collect();
+            preferred_step45_account_id(&flat, current, 45.0)
+        }
+        AccountSwitchingMode::ResetBased => preferred_reset_based_account_id(&chatgpt_candidates),
+    };
+
+    if let Some(pick) = pick {
+        if current.is_some_and(|id| id == pick) {
+            return Ok(None);
+        }
+        return Ok(Some(pick));
+    }
+
+    if !allow_api_key_fallback {
+        return Ok(None);
+    }
+
+    if chatgpt_candidates.is_empty() {
+        return Ok(api_key_candidates.into_iter().next());
+    }
+
+    Ok(None)
+}
+
 pub fn switch_active_account_on_rate_limit(
     code_home: &Path,
     state: &mut RateLimitSwitchState,
     allow_api_key_fallback: bool,
+    mode: AccountSwitchingMode,
     now: DateTime<Utc>,
     current_account_id: &str,
     current_mode: AuthMode,
@@ -212,6 +446,7 @@ pub fn switch_active_account_on_rate_limit(
         code_home,
         state,
         allow_api_key_fallback,
+        mode,
         now,
         Some(current_account_id),
     )?;
@@ -277,6 +512,18 @@ mod tests {
         Utc.with_ymd_and_hms(2025, 12, 22, 12, 0, 0).unwrap()
     }
 
+    fn snapshot(primary_used: f64, secondary_used: f64, primary_reset_after: Option<u64>) -> crate::protocol::RateLimitSnapshotEvent {
+        crate::protocol::RateLimitSnapshotEvent {
+            primary_used_percent: primary_used,
+            secondary_used_percent: secondary_used,
+            primary_to_secondary_ratio_percent: 0.0,
+            primary_window_minutes: 300,
+            secondary_window_minutes: 10_080,
+            primary_reset_after_seconds: primary_reset_after,
+            secondary_reset_after_seconds: None,
+        }
+    }
+
     #[test]
     fn selects_another_chatgpt_account_when_available() {
         let home = tempdir().expect("tmp");
@@ -303,6 +550,7 @@ mod tests {
             home.path(),
             &state,
             false,
+            AccountSwitchingMode::OnLimit,
             fixed_now(),
             Some(a.id.as_str()),
         )
@@ -338,7 +586,14 @@ mod tests {
         let mut state = RateLimitSwitchState::default();
         state.mark_limited(&a.id, AuthMode::ChatGPT, None);
         let next =
-            select_next_account_id(home.path(), &state, false, now, Some(a.id.as_str()))
+            select_next_account_id(
+                home.path(),
+                &state,
+                false,
+                AccountSwitchingMode::OnLimit,
+                now,
+                Some(a.id.as_str()),
+            )
                 .expect("select");
         assert!(next.is_none());
     }
@@ -374,13 +629,27 @@ mod tests {
         let mut state = RateLimitSwitchState::default();
         state.mark_limited(&a.id, AuthMode::ChatGPT, None);
 
-        let next = select_next_account_id(home.path(), &state, true, now, Some(a.id.as_str()))
+        let next = select_next_account_id(
+            home.path(),
+            &state,
+            true,
+            AccountSwitchingMode::OnLimit,
+            now,
+            Some(a.id.as_str()),
+        )
             .expect("select");
         assert_eq!(next.as_deref(), Some(b.id.as_str()));
 
         // After both ChatGPT accounts are exhausted, allow API key fallback.
         state.mark_limited(&b.id, AuthMode::ChatGPT, None);
-        let next = select_next_account_id(home.path(), &state, true, now, Some(b.id.as_str()))
+        let next = select_next_account_id(
+            home.path(),
+            &state,
+            true,
+            AccountSwitchingMode::OnLimit,
+            now,
+            Some(b.id.as_str()),
+        )
             .expect("select");
         assert_eq!(next.as_deref(), Some(api.id.as_str()));
     }
@@ -412,6 +681,7 @@ mod tests {
             home.path(),
             &state,
             false,
+            AccountSwitchingMode::OnLimit,
             fixed_now(),
             Some(b.id.as_str()),
         )
@@ -446,6 +716,7 @@ mod tests {
             home.path(),
             &mut state,
             false,
+            AccountSwitchingMode::OnLimit,
             now,
             a.id.as_str(),
             AuthMode::ChatGPT,
@@ -459,5 +730,168 @@ mod tests {
             .expect("active account")
             .expect("active account id");
         assert_eq!(active, b.id);
+    }
+
+    #[test]
+    fn does_not_pick_weekly_exhausted_accounts() {
+        let home = tempdir().expect("tmp");
+        let a = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-a", "a@example.com"),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert a");
+        let b = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-b", "b@example.com"),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert b");
+        let c = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-c", "c@example.com"),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert c");
+
+        let now = fixed_now();
+        account_usage::record_rate_limit_snapshot(
+            home.path(),
+            &b.id,
+            Some("Pro"),
+            &snapshot(0.0, 100.0, Some(10)),
+            now,
+        )
+        .expect("snapshot b");
+        account_usage::record_rate_limit_snapshot(
+            home.path(),
+            &c.id,
+            Some("Pro"),
+            &snapshot(20.0, 10.0, Some(100)),
+            now,
+        )
+        .expect("snapshot c");
+
+        let mut state = RateLimitSwitchState::default();
+        state.mark_limited(&a.id, AuthMode::ChatGPT, None);
+        let next = select_next_account_id(
+            home.path(),
+            &state,
+            false,
+            AccountSwitchingMode::OnLimit,
+            now,
+            Some(a.id.as_str()),
+        )
+        .expect("select");
+
+        assert_eq!(next.as_deref(), Some(c.id.as_str()));
+    }
+
+    #[test]
+    fn api_key_fallback_when_remaining_chatgpt_accounts_exhausted_by_snapshot() {
+        let home = tempdir().expect("tmp");
+        let a = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-a", "a@example.com"),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert a");
+        let b = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-b", "b@example.com"),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert b");
+        let api = auth_accounts::upsert_api_key_account(
+            home.path(),
+            "sk-test".to_string(),
+            None,
+            false,
+        )
+        .expect("insert api");
+
+        let now = fixed_now();
+        account_usage::record_rate_limit_snapshot(
+            home.path(),
+            &b.id,
+            Some("Pro"),
+            &snapshot(0.0, 100.0, Some(10)),
+            now,
+        )
+        .expect("snapshot b");
+
+        let mut state = RateLimitSwitchState::default();
+        state.mark_limited(&a.id, AuthMode::ChatGPT, None);
+        let next = select_next_account_id(
+            home.path(),
+            &state,
+            true,
+            AccountSwitchingMode::OnLimit,
+            now,
+            Some(a.id.as_str()),
+        )
+        .expect("select");
+
+        assert_eq!(next.as_deref(), Some(api.id.as_str()));
+    }
+
+    #[test]
+    fn preferred_account_selection_skips_exhausted_candidates() {
+        let home = tempdir().expect("tmp");
+        let a = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-a", "a@example.com"),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert a");
+        let b = auth_accounts::upsert_chatgpt_account(
+            home.path(),
+            chatgpt_tokens("acct-b", "b@example.com"),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert b");
+
+        let now = fixed_now();
+        account_usage::record_rate_limit_snapshot(
+            home.path(),
+            &a.id,
+            Some("Pro"),
+            &snapshot(0.0, 100.0, Some(1)),
+            now,
+        )
+        .expect("snapshot a");
+        account_usage::record_rate_limit_snapshot(
+            home.path(),
+            &b.id,
+            Some("Pro"),
+            &snapshot(10.0, 10.0, Some(10)),
+            now,
+        )
+        .expect("snapshot b");
+
+        let pick = select_preferred_account_id(
+            home.path(),
+            AccountSwitchingMode::ResetBased,
+            false,
+            now,
+            None,
+        )
+        .expect("preferred selection");
+
+        assert_eq!(pick.as_deref(), Some(b.id.as_str()));
     }
 }

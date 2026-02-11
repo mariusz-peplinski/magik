@@ -16,13 +16,14 @@ const SMALL_MIN_WIDTH: u16 = 50;
 const LARGE_MIN_HEIGHT: u16 = 28;
 const MEDIUM_MIN_HEIGHT: u16 = 21;
 const SMALL_MIN_HEIGHT: u16 = 19;
-const LARGE_VERSION_COLUMN: usize = 65;
-const MEDIUM_VERSION_COLUMN: usize = 43;
 const ANIMATED_CHARS: &[char] = &['█'];
 const HOT_PINK: Color = Color::Rgb(255, 20, 147);
 const NEON_PINK: Color = Color::Rgb(255, 16, 240);
 const PINK: Color = Color::Rgb(255, 64, 180);
 const LIGHT_PINK: Color = Color::Rgb(255, 182, 219);
+
+const INTRO_LOGO_ART: &str = include_str!("../assets/logo.txt");
+const INTRO_LOGO_HEIGHT: u16 = 6;
 
 pub fn intro_art_size_for_width(width: u16) -> IntroArtSize {
     if width >= LARGE_MIN_WIDTH {
@@ -49,12 +50,8 @@ pub(crate) fn intro_art_size_for_area(width: u16, height: u16) -> IntroArtSize {
 }
 
 pub fn intro_art_height(size: IntroArtSize) -> u16 {
-    match size {
-        IntroArtSize::Large => 28,
-        IntroArtSize::Medium => 21,
-        IntroArtSize::Small => 19,
-        IntroArtSize::Tiny => 7,
-    }
+    let _ = size;
+    INTRO_LOGO_HEIGHT
 }
 
 pub(crate) fn render_intro_animation_with_size_and_alpha_offset(
@@ -165,102 +162,23 @@ pub(crate) fn render_intro_animation_with_size_and_alpha_offset(
 /* ---------------- welcome art ---------------- */
 
 fn welcome_lines(size: IntroArtSize, version: &str) -> Vec<String> {
-    match size {
-        IntroArtSize::Large => large_welcome_lines(version),
-        IntroArtSize::Medium => medium_welcome_lines(version),
-        IntroArtSize::Small => small_welcome_lines(version),
-        IntroArtSize::Tiny => tiny_welcome_lines(version),
+    let _ = size;
+    logo_welcome_lines(version)
+}
+
+fn logo_welcome_lines(_version: &str) -> Vec<String> {
+    let mut raw_lines: Vec<&str> = INTRO_LOGO_ART.lines().collect();
+    while raw_lines.first().is_some_and(|line| line.trim().is_empty()) {
+        raw_lines.remove(0);
     }
-}
-
-const LARGE_VERSION_LINE: &str = "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗";
-fn large_welcome_lines(version: &str) -> Vec<String> {
-    let mut animated = vec![
-        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
-        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
-        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
-        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
-    ];
-
-    let base_width = LARGE_VERSION_LINE.chars().count();
-    let padding = LARGE_VERSION_COLUMN.saturating_sub(base_width);
-    let _version_pad = " ".repeat(padding);
-    let footer_line = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝";
-    let footer_len = footer_line.chars().count();
-    let footer_pad = LARGE_VERSION_COLUMN.saturating_sub(footer_len);
-    let footer_version_pad = " ".repeat(footer_pad);
-    animated.push(format!("{LARGE_VERSION_LINE}{footer_version_pad}{version}"));
-    animated.push(footer_line.to_string());
-
-    shift_left(animated, 3)
-}
-
-const MEDIUM_VERSION_LINE: &str = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝ ";
-fn medium_welcome_lines(version: &str) -> Vec<String> {
-    let mut animated = vec![
-        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
-        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
-        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
-        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
-        "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗".to_string(),
-    ];
-
-    let base_width = MEDIUM_VERSION_LINE.chars().count();
-    let padding = MEDIUM_VERSION_COLUMN.saturating_sub(base_width);
-    let _version_pad = " ".repeat(padding);
-    let base_len = MEDIUM_VERSION_LINE.chars().count();
-    let base_pad = MEDIUM_VERSION_COLUMN.saturating_sub(base_len);
-    let version_pad = " ".repeat(base_pad);
-    animated.push(format!("{MEDIUM_VERSION_LINE}{version_pad}{version}  "));
-    shift_left(animated, 3)
-}
-
-const SMALL_VERSION_LINE: &str = "   ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═════╝  ";
-
-fn small_welcome_lines(version: &str) -> Vec<String> {
-    let mut lines = vec![
-        "   ███╗   ███╗  █████╗   ██████╗ ██╗  ██████╗".to_string(),
-        "   ████╗ ████║ ██╔══██╗ ██╔════╝ ██║ ██╔════╝".to_string(),
-        "   ██╔████╔██║ ███████║ ██║  ███╗██║ ██║     ".to_string(),
-        "   ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║ ██║     ".to_string(),
-        "   ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║ ╚██████╗".to_string(),
-    ];
-
-    let base_width = SMALL_VERSION_LINE.chars().count();
-    let padding = MEDIUM_VERSION_COLUMN.saturating_sub(base_width);
-    let pad = " ".repeat(padding);
-    lines.push(format!("{SMALL_VERSION_LINE}{pad}{version}  "));
-
-    shift_left(lines, 3)
-}
-
-fn tiny_welcome_lines(version: &str) -> Vec<String> {
-    vec![
-        format!("MAGIC                 {version}    "),
-        " ███╗   ███╗  █████╗   ██████╗ ██╗    ".to_string(),
-        " ████╗ ████║ ██╔══██╗ ██╔════╝ ██║    ".to_string(),
-        " ██╔████╔██║ ███████║ ██║  ███╗██║    ".to_string(),
-        " ██║╚██╔╝██║ ██╔══██║ ██║   ██║██║    ".to_string(),
-        " ██║ ╚═╝ ██║ ██║  ██║ ╚██████╔╝██║    ".to_string(),
-        " ╚═╝     ╚═╝ ╚═╝  ╚═╝  ╚═════╝ ╚═╝    ".to_string(),
-    ]
-}
-
-fn shift_left(lines: Vec<String>, n: usize) -> Vec<String> {
-    let mut out = Vec::with_capacity(lines.len());
-    for line in lines {
-        let mut drop = n;
-        let mut new_line = String::with_capacity(line.len());
-        for ch in line.chars() {
-            if drop > 0 && ch == ' ' {
-                drop -= 1;
-                continue;
-            }
-            new_line.push(ch);
-        }
-        out.push(new_line);
+    while raw_lines.last().is_some_and(|line| line.trim().is_empty()) {
+        raw_lines.pop();
     }
-    out
+
+    raw_lines
+        .into_iter()
+        .map(|line| line.trim_end_matches('\r').to_string())
+        .collect()
 }
 
 /* ---------------- outline fill renderer ---------------- */

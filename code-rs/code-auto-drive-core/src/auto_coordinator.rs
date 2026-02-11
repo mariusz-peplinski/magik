@@ -2582,6 +2582,7 @@ fn classify_model_error_with_auto_switch(
                                 client.code_home(),
                                 state,
                                 client.api_key_fallback_on_all_accounts_limited(),
+                                client.account_switching_mode(),
                                 now,
                                 current_account_id.as_str(),
                                 current_auth_mode,

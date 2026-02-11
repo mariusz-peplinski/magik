@@ -885,6 +885,24 @@ impl App<'_> {
                     }
                     self.config.api_key_fallback_on_all_accounts_limited = enabled;
                 }
+                AppEvent::SetAccountSwitchingMode(mode) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_account_switching_mode(mode);
+                    }
+                    self.config.account_switching_mode = mode;
+                }
+                AppEvent::SetTuiShowReasoning(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_show_reasoning(enabled);
+                    }
+                    self.config.tui.show_reasoning = enabled;
+                }
+                AppEvent::SetTuiShowBlockTypeLabels(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_show_block_type_labels(enabled);
+                    }
+                    self.config.tui.show_block_type_labels = enabled;
+                }
                 AppEvent::ShowAutoDriveSettings => {
                     if let AppState::Chat { widget } = &mut self.app_state {
                         widget.show_auto_drive_settings();

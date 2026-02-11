@@ -136,7 +136,7 @@ impl WidgetRef for StatusIndicatorWidget {
         let bg = crate::colors::background();
         let text = crate::colors::text();
         let text_dim = crate::colors::text_dim();
-        let accent = crate::colors::info();
+        let accent = crate::colors::function();
 
         // Build header spans using theme colors (no terminal-default cyan/dim)
         let mut spans = vec![
@@ -197,4 +197,3 @@ impl WidgetRef for StatusIndicatorWidget {
         paragraph.render_ref(area, buf);
     }
 }
-

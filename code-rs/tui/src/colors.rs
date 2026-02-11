@@ -84,6 +84,7 @@ pub(crate) fn text_bright() -> Color {
     current_theme().text_bright
 }
 
+#[allow(dead_code)]
 pub(crate) fn spinner() -> Color {
     current_theme().spinner
 }

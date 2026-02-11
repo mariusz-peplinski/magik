@@ -2086,6 +2086,7 @@ async fn run_turn(
                                 sess.client.code_home(),
                                 &mut rate_limit_switch_state,
                                 sess.client.api_key_fallback_on_all_accounts_limited(),
+                                sess.client.account_switching_mode(),
                                 now,
                                 current_account_id.as_str(),
                                 current_auth_mode,

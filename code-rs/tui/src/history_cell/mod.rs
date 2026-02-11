@@ -30,6 +30,8 @@ mod upgrade;
 mod wait_status;
 mod web_search;
 
+pub(crate) use card_style::truncate_with_ellipsis;
+
 pub(crate) use assistant::{
     assistant_markdown_lines,
     compute_assistant_layout,

@@ -18,6 +18,29 @@ use strum_macros::Display;
 
 pub const DEFAULT_OTEL_ENVIRONMENT: &str = "dev";
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum AccountSwitchingMode {
+    /// Only switch accounts after hitting a rate/usage limit (current behavior).
+    #[serde(rename = "on-limit")]
+    OnLimit,
+    /// Keep connected accounts within ~10% usage of each other.
+    #[serde(rename = "even-usage")]
+    EvenUsage,
+    /// Use one account until it crosses the next 45% step, then rotate.
+    #[serde(rename = "step-45")]
+    Step45,
+    /// Prefer accounts with the shortest time-to-reset in the short window.
+    #[serde(rename = "reset-based")]
+    ResetBased,
+}
+
+impl Default for AccountSwitchingMode {
+    fn default() -> Self {
+        Self::OnLimit
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum OtelHttpProtocol {
@@ -682,6 +705,10 @@ pub struct Tui {
     #[serde(default)]
     pub show_reasoning: bool,
 
+    /// Whether to display a colored `[BLOCK_TYPE]` label above rendered history blocks.
+    #[serde(default)]
+    pub show_block_type_labels: bool,
+
     /// Streaming/animation behavior for assistant/reasoning output
     #[serde(default)]
     pub stream: StreamConfig,
@@ -728,6 +755,7 @@ impl Default for Tui {
             cached_terminal_background: None,
             highlight: HighlightConfig::default(),
             show_reasoning: false,
+            show_block_type_labels: false,
             stream: StreamConfig::default(),
             spinner: SpinnerSelection::default(),
             notifications: Notifications::default(),

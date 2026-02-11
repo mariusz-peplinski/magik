@@ -2,7 +2,6 @@ use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::colors;
 use crossterm::event::{KeyCode, KeyEvent};
-use code_core::config_types::AccountSwitchingMode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
@@ -10,97 +9,54 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
-pub(crate) struct AccountSwitchSettingsView {
+pub(crate) struct MagicSettingsView {
     app_event_tx: AppEventSender,
     selected_index: usize,
-    auto_switch_enabled: bool,
-    api_key_fallback_enabled: bool,
-    switching_mode: AccountSwitchingMode,
+    show_reasoning: bool,
+    show_block_type_labels: bool,
     is_complete: bool,
 }
 
-impl AccountSwitchSettingsView {
+impl MagicSettingsView {
     pub(crate) fn new(
         app_event_tx: AppEventSender,
-        auto_switch_enabled: bool,
-        api_key_fallback_enabled: bool,
-        switching_mode: AccountSwitchingMode,
+        show_reasoning: bool,
+        show_block_type_labels: bool,
     ) -> Self {
         Self {
             app_event_tx,
             selected_index: 0,
-            auto_switch_enabled,
-            api_key_fallback_enabled,
-            switching_mode,
+            show_reasoning,
+            show_block_type_labels,
             is_complete: false,
         }
     }
 
     fn option_count() -> usize {
-        4
-    }
-
-    fn toggle_auto_switch(&mut self) {
-        self.auto_switch_enabled = !self.auto_switch_enabled;
-        self.app_event_tx
-            .send(AppEvent::SetAutoSwitchAccountsOnRateLimit(
-                self.auto_switch_enabled,
-            ));
-    }
-
-    fn toggle_api_key_fallback(&mut self) {
-        self.api_key_fallback_enabled = !self.api_key_fallback_enabled;
-        self.app_event_tx
-            .send(AppEvent::SetApiKeyFallbackOnAllAccountsLimited(
-                self.api_key_fallback_enabled,
-            ));
+        3
     }
 
     fn close(&mut self) {
         self.is_complete = true;
     }
 
-    fn switching_mode_label(mode: AccountSwitchingMode) -> &'static str {
-        match mode {
-            AccountSwitchingMode::OnLimit => "On limit",
-            AccountSwitchingMode::EvenUsage => "Even usage",
-            AccountSwitchingMode::Step45 => "Step 45%",
-            AccountSwitchingMode::ResetBased => "Reset-based",
-        }
-    }
-
-    fn switching_mode_description(mode: AccountSwitchingMode) -> &'static str {
-        match mode {
-            AccountSwitchingMode::OnLimit => "Only switches when the active account is limited.",
-            AccountSwitchingMode::EvenUsage => "Keeps accounts within ~10% usage of each other.",
-            AccountSwitchingMode::Step45 => "Rotates when an account crosses 45% steps.",
-            AccountSwitchingMode::ResetBased => {
-                "Prefers accounts with the soonest short-window reset time."
-            }
-        }
-    }
-
-    fn next_switching_mode(mode: AccountSwitchingMode) -> AccountSwitchingMode {
-        match mode {
-            AccountSwitchingMode::OnLimit => AccountSwitchingMode::EvenUsage,
-            AccountSwitchingMode::EvenUsage => AccountSwitchingMode::Step45,
-            AccountSwitchingMode::Step45 => AccountSwitchingMode::ResetBased,
-            AccountSwitchingMode::ResetBased => AccountSwitchingMode::OnLimit,
-        }
-    }
-
-    fn cycle_switching_mode(&mut self) {
-        self.switching_mode = Self::next_switching_mode(self.switching_mode);
+    fn toggle_show_reasoning(&mut self) {
+        self.show_reasoning = !self.show_reasoning;
         self.app_event_tx
-            .send(AppEvent::SetAccountSwitchingMode(self.switching_mode));
+            .send(AppEvent::SetTuiShowReasoning(self.show_reasoning));
+    }
+
+    fn toggle_show_block_type_labels(&mut self) {
+        self.show_block_type_labels = !self.show_block_type_labels;
+        self.app_event_tx
+            .send(AppEvent::SetTuiShowBlockTypeLabels(self.show_block_type_labels));
     }
 
     fn activate_selected(&mut self) {
         match self.selected_index {
-            0 => self.toggle_auto_switch(),
-            1 => self.toggle_api_key_fallback(),
-            2 => self.cycle_switching_mode(),
-            3 => self.close(),
+            0 => self.toggle_show_reasoning(),
+            1 => self.toggle_show_block_type_labels(),
+            2 => self.close(),
             _ => {}
         }
     }
@@ -108,7 +64,7 @@ impl AccountSwitchSettingsView {
     fn info_lines(&self) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         lines.push(Line::from(vec![Span::styled(
-            "Accounts",
+            "Magic Settings",
             Style::default().add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
@@ -128,6 +84,7 @@ impl AccountSwitchSettingsView {
             } else {
                 Style::default().fg(colors::text_dim())
             };
+
             Line::from(vec![
                 Span::styled(format!("{indicator} "), style),
                 Span::styled(label.to_string(), style),
@@ -139,60 +96,31 @@ impl AccountSwitchSettingsView {
             ])
         };
 
-        let row_mode = |idx: usize, label: &str, value: &str| -> Line<'static> {
-            let selected = idx == self.selected_index;
-            let indicator = if selected { ">" } else { " " };
-            let style = if selected { highlight } else { normal };
-            Line::from(vec![
-                Span::styled(format!("{indicator} "), style),
-                Span::styled(label.to_string(), style),
-                Span::raw("  "),
-                Span::styled(
-                    format!("[{value}]"),
-                    Style::default().fg(colors::info()),
-                ),
-            ])
-        };
-
-        lines.push(row_toggle(
-            0,
-            "Auto-switch on rate/usage limit",
-            self.auto_switch_enabled,
-        ));
+        lines.push(row_toggle(0, "Show reasoning", self.show_reasoning));
         lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled(
-                "Switches to another connected account on 429/usage_limit.",
+                "Always display model reasoning blocks when present.",
                 dim,
             ),
         ]));
 
         lines.push(row_toggle(
             1,
-            "API key fallback when all accounts limited",
-            self.api_key_fallback_enabled,
+            "Show block type labels",
+            self.show_block_type_labels,
         ));
         lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled(
-                "Only used if every connected ChatGPT account is limited.",
+                "Adds a colored [TYPE] header above displayed blocks.",
                 dim,
             ),
         ]));
 
-        lines.push(row_mode(
-            2,
-            "Switching strategy",
-            Self::switching_mode_label(self.switching_mode),
-        ));
-        lines.push(Line::from(vec![
-            Span::raw("    "),
-            Span::styled(Self::switching_mode_description(self.switching_mode), dim),
-        ]));
-
         lines.push(Line::from(""));
 
-        let close_selected = self.selected_index == 3;
+        let close_selected = self.selected_index == 2;
         let close_style = if close_selected { highlight } else { normal };
         let indicator = if close_selected { ">" } else { " " };
         lines.push(Line::from(vec![
@@ -240,7 +168,7 @@ impl AccountSwitchSettingsView {
                     self.selected_index = self.selected_index.saturating_sub(1);
                 }
             }
-            KeyCode::Enter | KeyCode::Char(' ') => self.activate_selected(),
+            KeyCode::Enter => self.activate_selected(),
             _ => {}
         }
     }
@@ -249,3 +177,4 @@ impl AccountSwitchSettingsView {
         self.is_complete
     }
 }
+

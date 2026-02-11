@@ -293,9 +293,9 @@ impl ReviewSettingsView {
 
     fn build_rows(&self) -> (Vec<RowData>, Vec<usize>, Vec<SelectionKind>) {
         let rows = vec![
+            RowData::GitSnapshotsEnabled,
             RowData::SectionReview,
             RowData::ReviewEnabled,
-            RowData::GitSnapshotsEnabled,
             RowData::ReviewModel,
             RowData::ReviewResolveModel,
             RowData::ReviewAttempts,
@@ -305,10 +305,10 @@ impl ReviewSettingsView {
             RowData::AutoReviewResolveModel,
             RowData::AutoReviewAttempts,
         ];
-        let selection_rows = vec![1, 2, 3, 4, 5, 7, 8, 9, 10];
+        let selection_rows = vec![0, 2, 3, 4, 5, 7, 8, 9, 10];
         let selection_kinds = vec![
-            SelectionKind::ReviewEnabled,
             SelectionKind::GitSnapshotsEnabled,
+            SelectionKind::ReviewEnabled,
             SelectionKind::ReviewModel,
             SelectionKind::ReviewResolveModel,
             SelectionKind::ReviewAttempts,
@@ -441,7 +441,7 @@ impl ReviewSettingsView {
                     Span::styled("Git snapshots", label_style),
                     Span::raw("  "),
                     status_span,
-                    Span::raw("  (/undo + review scope snapshots)"),
+                    Span::raw("  (/undo + review/auto-review scope snapshots)"),
                 ];
                 if selected {
                     let hint = if self.git_snapshots_enabled {

@@ -347,6 +347,10 @@ impl ModelClient {
         self.config.api_key_fallback_on_all_accounts_limited
     }
 
+    pub fn account_switching_mode(&self) -> crate::config_types::AccountSwitchingMode {
+        self.config.account_switching_mode
+    }
+
     pub fn build_tools_config_with_sandbox(
         &self,
         sandbox_policy: SandboxPolicy,
@@ -971,6 +975,52 @@ impl ModelClient {
         let mut request_id = String::new();
         let mut rate_limit_switch_state = crate::account_switching::RateLimitSwitchState::default();
 
+        if self.config.auto_switch_accounts_on_rate_limit
+            && self.config.account_switching_mode != crate::config_types::AccountSwitchingMode::OnLimit
+            && auth_manager.is_some()
+            && auth::read_code_api_key_from_env().is_none()
+        {
+            let now = Utc::now();
+            let auth = auth_manager.as_ref().and_then(|m| m.auth());
+            let current_account_id = auth
+                .as_ref()
+                .and_then(|current| current.get_account_id())
+                .or_else(|| {
+                    auth_accounts::get_active_account_id(self.code_home())
+                        .ok()
+                        .flatten()
+                });
+
+            if let Ok(Some(next_account_id)) = crate::account_switching::select_preferred_account_id(
+                self.code_home(),
+                self.config.account_switching_mode,
+                self.config.api_key_fallback_on_all_accounts_limited,
+                now,
+                current_account_id.as_deref(),
+            ) {
+                tracing::info!(
+                    from_account_id = %current_account_id.as_deref().unwrap_or(""),
+                    to_account_id = %next_account_id,
+                    mode = ?self.config.account_switching_mode,
+                    "preselecting preferred account"
+                );
+                match auth::activate_account(self.code_home(), &next_account_id) {
+                    Ok(()) => {
+                        if let Some(manager) = auth_manager.as_ref() {
+                            manager.reload();
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            to_account_id = %next_account_id,
+                            error = %err,
+                            "failed to activate preferred account"
+                        );
+                    }
+                }
+            }
+        }
+
         // Compute endpoint with the latest available auth (may be None at this point).
         let endpoint = self
             .provider
@@ -1334,6 +1384,7 @@ impl ModelClient {
                                     self.code_home(),
                                     &rate_limit_switch_state,
                                     self.config.api_key_fallback_on_all_accounts_limited,
+                                    self.config.account_switching_mode,
                                     now,
                                     Some(current_account_id.as_str()),
                                 )
@@ -1749,6 +1800,7 @@ impl ModelClient {
                             self.code_home(),
                             &rate_limit_switch_state,
                             self.config.api_key_fallback_on_all_accounts_limited,
+                            self.config.account_switching_mode,
                             now,
                             Some(current_account_id.as_str()),
                         )

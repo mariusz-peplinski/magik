@@ -128,8 +128,8 @@ impl HeightManager {
             self.last_area = Some(area);
         }
 
-        // Status bar height is fixed at 3 when enabled.
-        let status_h = if status_enabled { 3u16 } else { 0u16 };
+        // Status bar height is fixed at 4 when enabled (2 border rows + 2 inner rows).
+        let status_h = if status_enabled { 4u16 } else { 0u16 };
 
         // Cap the bottom pane to a percentage of screen height, with a minimum of 5 rows.
         let percent_cap: u16 = ((area.height as u32).saturating_mul(self.cfg.bottom_percent_cap as u32) / 100) as u16;

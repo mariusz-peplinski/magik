@@ -5,6 +5,7 @@ use crate::config_types::ReasoningEffort;
 use crate::config_types::ReasoningSummary;
 use crate::config_types::TextVerbosity;
 use crate::config_types::Personality;
+use crate::config_types::AccountSwitchingMode;
 use crate::protocol::AskForApproval;
 
 /// Collection of common configuration options that a user can define as a unit
@@ -49,4 +50,7 @@ pub struct ConfigProfile {
     /// When true, fall back to an API key account only if every connected
     /// ChatGPT account is rate/usage limited.
     pub api_key_fallback_on_all_accounts_limited: Option<bool>,
+
+    /// Strategy for picking which account to use when auto-switching is enabled.
+    pub account_switching_mode: Option<AccountSwitchingMode>,
 }

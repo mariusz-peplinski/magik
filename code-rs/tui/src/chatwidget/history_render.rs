@@ -5,6 +5,9 @@ use std::time::Instant;
 
 use ratatui::buffer::Cell as BufferCell;
 use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
 
 use crate::history::state::{HistoryId, HistoryRecord, HistoryState};
 use crate::history_cell::{
@@ -19,6 +22,7 @@ use crate::history_cell::{
     AssistantLayoutCache,
     AssistantMarkdownCell,
     HistoryCell,
+    HistoryCellType,
 };
 use code_core::config::Config;
 #[cfg(feature = "code-fork")]
@@ -674,6 +678,22 @@ impl<'a> RenderRequest<'a> {
     /// `HistoryCell` cache (which may include per-cell layout bridges) and fall
     /// back to semantic lines derived from the record state.
     fn build_lines(&self, history_state: &HistoryState) -> Vec<Line<'static>> {
+        let mut out = self.build_lines_inner(history_state);
+        if self.config.tui.show_block_type_labels {
+            if let Some(label) = block_type_label_for_request(self.kind, self.cell) {
+                let styled = Line::from(Span::styled(
+                    format!("[{label}]"),
+                    Style::default()
+                        .fg(crate::colors::function())
+                        .add_modifier(Modifier::BOLD),
+                ));
+                out.insert(0, styled);
+            }
+        }
+        out
+    }
+
+    fn build_lines_inner(&self, history_state: &HistoryState) -> Vec<Line<'static>> {
         if let RenderRequestKind::Exec { id } = self.kind {
             if let Some(HistoryRecord::Exec(record)) = history_state.record(id) {
                 return exec_display_lines_from_record(record);
@@ -726,6 +746,43 @@ impl<'a> RenderRequest<'a> {
             return lines.as_ref().clone();
         }
         Vec::new()
+    }
+}
+
+fn block_type_label_for_request(
+    kind: RenderRequestKind,
+    cell: Option<&dyn HistoryCell>,
+) -> Option<&'static str> {
+    match kind {
+        RenderRequestKind::Assistant { .. } | RenderRequestKind::Streaming { .. } => {
+            Some("RESPONSE")
+        }
+        RenderRequestKind::Exec { .. } | RenderRequestKind::MergedExec { .. } => Some("COMMAND"),
+        RenderRequestKind::Diff { .. } => Some("DIFF"),
+        RenderRequestKind::Explore { .. } => Some("TOOL"),
+        RenderRequestKind::Legacy => cell.and_then(|cell| block_type_label_for_cell_kind(cell.kind())),
+    }
+}
+
+fn block_type_label_for_cell_kind(kind: HistoryCellType) -> Option<&'static str> {
+    match kind {
+        HistoryCellType::Plain => None,
+        HistoryCellType::User => Some("USER"),
+        HistoryCellType::Assistant => Some("RESPONSE"),
+        HistoryCellType::Reasoning => Some("THINKING"),
+        HistoryCellType::Error => Some("ERROR"),
+        HistoryCellType::Exec { .. } => Some("COMMAND"),
+        HistoryCellType::Tool { .. } => Some("TOOL"),
+        HistoryCellType::Patch { .. } => Some("PATCH"),
+        HistoryCellType::PlanUpdate => Some("PLAN"),
+        HistoryCellType::BackgroundEvent => Some("INFO"),
+        HistoryCellType::Notice => Some("NOTICE"),
+        HistoryCellType::CompactionSummary => Some("COMPACT"),
+        HistoryCellType::Diff => Some("DIFF"),
+        HistoryCellType::Image => Some("IMAGE"),
+        HistoryCellType::Context => Some("CONTEXT"),
+        HistoryCellType::AnimatedWelcome => None,
+        HistoryCellType::Loading => None,
     }
 }
 

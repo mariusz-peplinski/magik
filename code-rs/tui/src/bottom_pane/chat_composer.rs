@@ -3015,10 +3015,10 @@ impl WidgetRef for ChatComposer {
 
                 let title_line = Line::from(vec![
                     Span::raw(" "),
-                    Span::styled(spinner_str, Style::default().fg(crate::colors::info())),
+                    Span::styled(spinner_str, Style::default().fg(crate::colors::function())),
                     Span::styled(
                         format!(" {}... ", self.status_message),
-                        Style::default().fg(crate::colors::info()),
+                        Style::default().fg(crate::colors::function()),
                     ),
                 ]);
                 input_block = input_block.title(title_line);

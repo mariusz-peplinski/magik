@@ -665,6 +665,9 @@ pub(crate) enum AppEvent {
     SetAutoUpgradeEnabled(bool),
     SetAutoSwitchAccountsOnRateLimit(bool),
     SetApiKeyFallbackOnAllAccountsLimited(bool),
+    SetAccountSwitchingMode(code_core::config_types::AccountSwitchingMode),
+    SetTuiShowReasoning(bool),
+    SetTuiShowBlockTypeLabels(bool),
     RequestAgentInstall { name: String, selected_index: usize },
     AgentsOverviewSelectionChanged { index: usize },
     /// Add or update an agent's settings (enabled, params, instructions)

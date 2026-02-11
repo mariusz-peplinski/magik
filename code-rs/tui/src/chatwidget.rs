@@ -1135,7 +1135,7 @@ impl RateLimitWarningState {
                 scope: RateLimitWarningScope::Secondary,
                 threshold,
                 message: format!(
-                    "Secondary usage exceeded {threshold:.0}% of the limit. Run /limits for detailed usage."
+                    "Weekly usage exceeded {threshold:.0}% of the limit. Run /limits for detailed usage."
                 ),
             });
             self.weekly_index = next_weekly_index;
@@ -2511,6 +2511,7 @@ use self::settings_overlay::{
     AgentsSettingsContent,
     LimitsSettingsContent,
     ChromeSettingsContent,
+    MagicSettingsContent,
     McpSettingsContent,
     ModelSettingsContent,
     PlanningSettingsContent,
@@ -16711,8 +16712,18 @@ impl ChatWidget<'_> {
             self.app_event_tx.clone(),
             self.config.auto_switch_accounts_on_rate_limit,
             self.config.api_key_fallback_on_all_accounts_limited,
+            self.config.account_switching_mode,
         );
         AccountsSettingsContent::new(view)
+    }
+
+    fn build_magic_settings_content(&self) -> MagicSettingsContent {
+        let view = crate::bottom_pane::MagicSettingsView::new(
+            self.app_event_tx.clone(),
+            self.config.tui.show_reasoning,
+            self.config.tui.show_block_type_labels,
+        );
+        MagicSettingsContent::new(view)
     }
 
     fn build_validation_settings_content(&mut self) -> ValidationSettingsContent {
@@ -23768,6 +23779,56 @@ Have we met every part of this goal and is there no further work to do?"#
         self.request_redraw();
     }
 
+    pub(crate) fn set_account_switching_mode(
+        &mut self,
+        mode: code_core::config_types::AccountSwitchingMode,
+    ) {
+        if self.config.account_switching_mode == mode {
+            return;
+        }
+        self.config.account_switching_mode = mode;
+
+        let code_home = self.config.code_home.clone();
+        let profile = self.config.active_profile.clone();
+        let mode_value = match mode {
+            code_core::config_types::AccountSwitchingMode::OnLimit => "on-limit",
+            code_core::config_types::AccountSwitchingMode::EvenUsage => "even-usage",
+            code_core::config_types::AccountSwitchingMode::Step45 => "step-45",
+            code_core::config_types::AccountSwitchingMode::ResetBased => "reset-based",
+        };
+        tokio::spawn(async move {
+            if let Err(err) = code_core::config_edit::persist_overrides(
+                &code_home,
+                profile.as_deref(),
+                &[(&["account_switching_mode"], mode_value)],
+            )
+            .await
+            {
+                tracing::warn!("failed to persist account switching mode: {err}");
+            }
+        });
+
+        let notice = format!("Account switching: {mode_value}");
+        self.bottom_pane.flash_footer_notice(notice);
+
+        let should_refresh_accounts = matches!(
+            self.settings
+                .overlay
+                .as_ref()
+                .map(|overlay| overlay.active_section()),
+            Some(SettingsSection::Accounts)
+        );
+        if should_refresh_accounts {
+            let content = self.build_accounts_settings_content();
+            if let Some(overlay) = self.settings.overlay.as_mut() {
+                overlay.set_accounts_content(content);
+            }
+        }
+
+        self.refresh_settings_overview_rows();
+        self.request_redraw();
+    }
+
     /// Forward file-search results to the bottom pane.
     pub(crate) fn apply_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
         self.bottom_pane.on_file_search_result(query, matches);
@@ -23798,6 +23859,7 @@ Have we met every part of this goal and is there no further work to do?"#
         overlay.set_model_content(self.build_model_settings_content());
         overlay.set_planning_content(self.build_planning_settings_content());
         overlay.set_theme_content(self.build_theme_settings_content());
+        overlay.set_magic_content(self.build_magic_settings_content());
         if let Some(update_content) = self.build_updates_settings_content() {
             overlay.set_updates_content(update_content);
         }
@@ -24177,6 +24239,7 @@ Have we met every part of this goal and is there no further work to do?"#
                 let summary = match section {
                     SettingsSection::Model => self.settings_summary_model(),
                     SettingsSection::Theme => self.settings_summary_theme(),
+                    SettingsSection::Magic => self.settings_summary_magic(),
                     SettingsSection::Planning => self.settings_summary_planning(),
                     SettingsSection::Updates => self.settings_summary_updates(),
                     SettingsSection::Accounts => self.settings_summary_accounts(),
@@ -24194,6 +24257,22 @@ Have we met every part of this goal and is there no further work to do?"#
                 SettingsOverviewRow::new(section, summary)
             })
             .collect()
+    }
+
+    fn settings_summary_magic(&self) -> Option<String> {
+        let reasoning = if self.config.tui.show_reasoning {
+            "Reasoning: On"
+        } else {
+            "Reasoning: Off"
+        };
+
+        let labels = if self.config.tui.show_block_type_labels {
+            "Block labels: On"
+        } else {
+            "Block labels: Off"
+        };
+
+        Some(format!("{reasoning} · {labels}"))
     }
 
     fn settings_summary_model(&self) -> Option<String> {
@@ -24276,7 +24355,14 @@ Have we met every part of this goal and is there no further work to do?"#
             "API key fallback: Off"
         };
 
-        Some(format!("{auto_switch} · {api_key_fallback}"))
+        let mode = match self.config.account_switching_mode {
+            code_core::config_types::AccountSwitchingMode::OnLimit => "On limit",
+            code_core::config_types::AccountSwitchingMode::EvenUsage => "Even",
+            code_core::config_types::AccountSwitchingMode::Step45 => "Step 45%",
+            code_core::config_types::AccountSwitchingMode::ResetBased => "Reset-based",
+        };
+
+        Some(format!("{auto_switch} · {api_key_fallback} · Strategy: {mode}"))
     }
 
     fn settings_summary_agents(&self) -> Option<String> {
@@ -24387,7 +24473,7 @@ Have we met every part of this goal and is there no further work to do?"#
         if let Some(snapshot) = &self.rate_limit_snapshot {
             let primary = snapshot.primary_used_percent.clamp(0.0, 100.0).round() as i64;
             let secondary = snapshot.secondary_used_percent.clamp(0.0, 100.0).round() as i64;
-            Some(format!("Primary: {}% · Secondary: {}%", primary, secondary))
+            Some(format!("Hourly: {}% · Weekly: {}%", primary, secondary))
         } else if self.rate_limit_fetch_inflight {
             Some("Refreshing usage...".to_string())
         } else {
@@ -24580,6 +24666,7 @@ Have we met every part of this goal and is there no further work to do?"#
         let handled = match section {
             SettingsSection::Model
             | SettingsSection::Theme
+            | SettingsSection::Magic
             | SettingsSection::Planning
             | SettingsSection::Updates
             | SettingsSection::Review
@@ -26331,6 +26418,14 @@ Have we met every part of this goal and is there no further work to do?"#
         // Update the config to reflect the current state (inverted because collapsed means hidden)
         if has_reasoning_cells {
             self.config.tui.show_reasoning = !new_collapsed_state;
+            if let Ok(home) = code_core::config::find_code_home() {
+                if let Err(err) = code_core::config::set_tui_show_reasoning(
+                    &home,
+                    self.config.tui.show_reasoning,
+                ) {
+                    tracing::warn!("Failed to persist reasoning visibility: {err}");
+                }
+            }
             // Brief status to confirm the toggle to the user
             let status = if self.config.tui.show_reasoning {
                 "Reasoning shown"
@@ -26353,6 +26448,45 @@ Have we met every part of this goal and is there no further work to do?"#
         // In standard terminal mode, re-mirror the transcript so scrollback reflects
         // the new collapsed/expanded state. We cannot edit prior lines in scrollback,
         // so append a fresh view.
+        if self.standard_terminal_mode {
+            let mut lines = Vec::new();
+            lines.push(ratatui::text::Line::from(""));
+            lines.extend(self.export_transcript_lines_for_buffer());
+            self.app_event_tx
+                .send(crate::app_event::AppEvent::InsertHistory(lines));
+        }
+    }
+
+    pub(crate) fn set_show_reasoning(&mut self, enabled: bool) {
+        self.config.tui.show_reasoning = enabled;
+        if let Ok(home) = code_core::config::find_code_home() {
+            if let Err(err) = code_core::config::set_tui_show_reasoning(&home, enabled) {
+                tracing::warn!("Failed to persist reasoning visibility: {err}");
+            }
+        }
+
+        let collapsed = !enabled;
+        for cell in &self.history_cells {
+            if let Some(reasoning_cell) = cell
+                .as_any()
+                .downcast_ref::<history_cell::CollapsibleReasoningCell>()
+            {
+                reasoning_cell.set_collapsed(collapsed);
+            }
+        }
+
+        self.bottom_pane.set_reasoning_state(enabled);
+        let status = if enabled {
+            "Reasoning shown"
+        } else {
+            "Reasoning hidden"
+        };
+        self.bottom_pane.update_status_text(status.to_string());
+
+        self.refresh_reasoning_collapsed_visibility();
+        self.invalidate_height_cache();
+        self.request_redraw();
+
         if self.standard_terminal_mode {
             let mut lines = Vec::new();
             lines.push(ratatui::text::Line::from(""));
@@ -26389,6 +26523,28 @@ Have we met every part of this goal and is there no further work to do?"#
         }
         // If no reasoning cells exist, return the config default
         self.config.tui.show_reasoning
+    }
+
+    pub(crate) fn set_show_block_type_labels(&mut self, enabled: bool) {
+        self.config.tui.show_block_type_labels = enabled;
+        if let Ok(home) = code_core::config::find_code_home() {
+            if let Err(err) =
+                code_core::config::set_tui_show_block_type_labels(&home, enabled)
+            {
+                tracing::warn!("Failed to persist block type label setting: {err}");
+            }
+        }
+
+        let status = if enabled {
+            "Block type labels: On"
+        } else {
+            "Block type labels: Off"
+        };
+        self.bottom_pane.update_status_text(status.to_string());
+        self.history_render.invalidate_all();
+        self.mark_render_requests_dirty();
+        self.invalidate_height_cache();
+        self.request_redraw();
     }
 
     pub(crate) fn show_chrome_options(&mut self, port: Option<u16>) {
@@ -29261,6 +29417,82 @@ Have we met every part of this goal and is there no further work to do?"#
 
         let status_line = Line::from(status_spans);
 
+        let limits_line = {
+            let account_label = auth_accounts::get_active_account_id(&self.config.code_home)
+                .ok()
+                .flatten()
+                .and_then(|id| auth_accounts::find_account(&self.config.code_home, &id).ok())
+                .flatten()
+                .and_then(|account| {
+                    account
+                        .tokens
+                        .as_ref()
+                        .and_then(|tokens| tokens.id_token.email.clone())
+                        .filter(|email| !email.trim().is_empty())
+                        .or_else(|| Some(account_display_label(&account)))
+                })
+                .unwrap_or_else(|| "Not signed in".to_string());
+
+            let email_style = Style::default()
+                .fg(crate::colors::info())
+                .add_modifier(Modifier::BOLD);
+            let usage_style = Style::default()
+                .fg(crate::colors::function())
+                .add_modifier(Modifier::BOLD);
+            let dim_style = Style::default().fg(crate::colors::text_dim());
+
+            let (plain, spans) = if let Some(snapshot) = &self.rate_limit_snapshot {
+                let hourly_used = snapshot.primary_used_percent.clamp(0.0, 100.0).round() as i64;
+                let weekly_used = snapshot.secondary_used_percent.clamp(0.0, 100.0).round() as i64;
+
+                let reset_duration = self
+                    .rate_limit_primary_next_reset_at
+                    .and_then(|reset_at| reset_at.signed_duration_since(Utc::now()).to_std().ok())
+                    .or_else(|| {
+                        snapshot
+                            .primary_reset_after_seconds
+                            .map(std::time::Duration::from_secs)
+                    });
+                let reset = reset_duration
+                    .map(|duration| format!(" [resets in {}]", format_duration(duration)))
+                    .unwrap_or_default();
+
+                let plain = format!("{account_label}: {hourly_used}%/{weekly_used}%{reset}");
+                let mut spans: Vec<Span<'static>> = Vec::new();
+                spans.push(Span::styled(account_label.clone(), email_style));
+                spans.push(Span::styled(": ".to_string(), dim_style));
+                spans.push(Span::styled(format!("{hourly_used}%/{weekly_used}%"), usage_style));
+                if !reset.is_empty() {
+                    spans.push(Span::styled(reset, dim_style));
+                }
+                (plain, spans)
+            } else if self.rate_limit_fetch_inflight {
+                let plain = format!("{account_label}: refreshing usage...");
+                let spans = vec![
+                    Span::styled(account_label.clone(), email_style),
+                    Span::styled(": ".to_string(), dim_style),
+                    Span::styled("refreshing usage...".to_string(), dim_style),
+                ];
+                (plain, spans)
+            } else {
+                let plain = format!("{account_label}: usage unavailable");
+                let spans = vec![
+                    Span::styled(account_label.clone(), email_style),
+                    Span::styled(": ".to_string(), dim_style),
+                    Span::styled("usage unavailable".to_string(), dim_style),
+                ];
+                (plain, spans)
+            };
+
+            let span_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+            if span_width <= inner_width {
+                Line::from(spans)
+            } else {
+                let display = crate::history_cell::truncate_with_ellipsis(plain.as_str(), inner_width);
+                Line::styled(display.trim_end().to_string(), dim_style)
+            }
+        };
+
         let now = Instant::now();
         let mut frame_needed = false;
         if ENABLE_WARP_STRIPES && self.header_wave.schedule_if_needed(now) {
@@ -29288,7 +29520,7 @@ Have we met every part of this goal and is there no further work to do?"#
                 .fg(crate::colors::text())
         };
 
-        let status_widget = Paragraph::new(vec![status_line])
+        let status_widget = Paragraph::new(vec![status_line, limits_line])
             .alignment(ratatui::layout::Alignment::Center)
             .style(status_style);
         ratatui::widgets::Widget::render(status_widget, padded_inner, buf);
@@ -39893,7 +40125,7 @@ impl WidgetRef for &ChatWidget<'_> {
                             consumed_width += frame.chars().count();
                             header_spans.push(ratatui::text::Span::styled(
                                 frame,
-                                Style::default().fg(crate::colors::spinner()),
+                                Style::default().fg(crate::colors::function()),
                             ));
                             header_spans.push(ratatui::text::Span::raw(" "));
                             consumed_width = consumed_width.saturating_add(1);
@@ -39907,7 +40139,7 @@ impl WidgetRef for &ChatWidget<'_> {
                             .saturating_add(UnicodeWidthStr::width(status_text.as_str()));
                         header_spans.push(ratatui::text::Span::styled(
                             status_text,
-                            Style::default().fg(crate::colors::text_dim()),
+                            Style::default().fg(crate::colors::function()),
                         ));
 
                         let interval = crate::spinner::current_spinner().interval_ms.max(50);

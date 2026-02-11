@@ -15,6 +15,7 @@ use crate::bottom_pane::{
     AutoDriveSettingsView,
     BottomPaneView,
     ConditionalUpdate,
+    MagicSettingsView,
     settings_panel::{render_panel, PanelFrameStyle},
     McpSettingsView,
     ModelSelectionView,
@@ -333,6 +334,31 @@ impl AccountsSettingsContent {
 }
 
 impl SettingsContent for AccountsSettingsContent {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.view.render_without_frame(area, buf);
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> bool {
+        self.view.handle_key_event_direct(key);
+        true
+    }
+
+    fn is_complete(&self) -> bool {
+        self.view.is_view_complete()
+    }
+}
+
+pub(crate) struct MagicSettingsContent {
+    view: MagicSettingsView,
+}
+
+impl MagicSettingsContent {
+    pub(crate) fn new(view: MagicSettingsView) -> Self {
+        Self { view }
+    }
+}
+
+impl SettingsContent for MagicSettingsContent {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         self.view.render_without_frame(area, buf);
     }
@@ -1308,6 +1334,7 @@ pub(crate) struct SettingsOverlayView {
     model_content: Option<ModelSettingsContent>,
     planning_content: Option<PlanningSettingsContent>,
     theme_content: Option<ThemeSettingsContent>,
+    magic_content: Option<MagicSettingsContent>,
     updates_content: Option<UpdatesSettingsContent>,
     notifications_content: Option<NotificationsSettingsContent>,
     accounts_content: Option<AccountsSettingsContent>,
@@ -1333,6 +1360,7 @@ impl SettingsOverlayView {
             model_content: None,
             planning_content: None,
             theme_content: None,
+            magic_content: None,
             updates_content: None,
             notifications_content: None,
             accounts_content: None,
@@ -1411,6 +1439,10 @@ impl SettingsOverlayView {
 
     pub(crate) fn set_theme_content(&mut self, content: ThemeSettingsContent) {
         self.theme_content = Some(content);
+    }
+
+    pub(crate) fn set_magic_content(&mut self, content: MagicSettingsContent) {
+        self.magic_content = Some(content);
     }
 
     pub(crate) fn set_updates_content(&mut self, content: UpdatesSettingsContent) {
@@ -1924,6 +1956,7 @@ impl SettingsOverlayView {
         match section {
             SettingsSection::Model => "Select Model & Reasoning",
             SettingsSection::Theme => "Theme Settings",
+            SettingsSection::Magic => "Magic Settings",
             SettingsSection::Planning => "Planning Settings",
             SettingsSection::Updates => "Upgrade",
             SettingsSection::Accounts => "Account Switching",
@@ -2233,6 +2266,13 @@ impl SettingsOverlayView {
                 }
                 self.render_placeholder(area, buf, SettingsSection::Theme.placeholder());
             }
+            SettingsSection::Magic => {
+                if let Some(content) = self.magic_content.as_ref() {
+                    content.render(area, buf);
+                    return;
+                }
+                self.render_placeholder(area, buf, SettingsSection::Magic.placeholder());
+            }
             SettingsSection::Updates => {
                 if let Some(content) = self.updates_content.as_ref() {
                     content.render(area, buf);
@@ -2343,6 +2383,10 @@ impl SettingsOverlayView {
                 .map(|content| content as &mut dyn SettingsContent),
             SettingsSection::Theme => self
                 .theme_content
+                .as_mut()
+                .map(|content| content as &mut dyn SettingsContent),
+            SettingsSection::Magic => self
+                .magic_content
                 .as_mut()
                 .map(|content| content as &mut dyn SettingsContent),
             SettingsSection::Updates => self
