@@ -55,6 +55,9 @@ impl std::fmt::Debug for TerminalInfo {
 
 /// Initialize the terminal (full screen mode with alternate screen)
 pub fn init(config: &Config) -> Result<(Tui, TerminalInfo)> {
+    // Load file-backed theme catalog (`~/.code/themes`) and seed bundled
+    // presets/GPT samples before resolving the active theme.
+    crate::theme::initialize_theme_file_catalog();
     // Initialize the theme based on config
     crate::theme::init_theme(&config.tui.theme);
     // Initialize spinner selection and register custom spinners from config

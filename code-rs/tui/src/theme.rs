@@ -1,10 +1,12 @@
 use code_core::config_types::ThemeColors;
 use code_core::config_types::ThemeConfig;
 use code_core::config_types::ThemeName;
+use code_core::theme_files::ThemeFileSpec;
 use lazy_static::lazy_static;
 use ratatui::style::Color;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::RwLock;
 
 lazy_static! {
@@ -13,6 +15,18 @@ lazy_static! {
     static ref CUSTOM_THEME_LABEL: RwLock<Option<String>> = RwLock::new(None);
     static ref CUSTOM_THEME_COLORS: RwLock<Option<code_core::config_types::ThemeColors>> = RwLock::new(None);
     static ref CUSTOM_THEME_IS_DARK: RwLock<Option<bool>> = RwLock::new(None);
+    static ref FILE_THEME_CATALOG: RwLock<Vec<FileThemeCatalogEntry>> = RwLock::new(Vec::new());
+    static ref ACTIVE_FILE_THEME_ID: RwLock<Option<String>> = RwLock::new(None);
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileThemeCatalogEntry {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub is_dark: bool,
+    pub colors: ThemeColors,
+    pub builtin_theme: Option<ThemeName>,
 }
 
 /// Represents a complete theme with all colors resolved
@@ -58,8 +72,488 @@ impl Default for Theme {
     }
 }
 
+const BUILTIN_THEME_ORDER_IDS: [&str; 16] = [
+    "light-photon",
+    "light-prism-rainbow",
+    "light-vivid-triad",
+    "light-porcelain",
+    "light-sandbar",
+    "light-glacier",
+    "dark-paper-light-pro",
+    "dark-carbon-night",
+    "dark-shinobi-dusk",
+    "dark-oled-black-pro",
+    "dark-amber-terminal",
+    "dark-aurora-flux",
+    "dark-charcoal-rainbow",
+    "dark-zen-garden",
+    "light-photon-ansi16",
+    "dark-carbon-ansi16",
+];
+
+pub fn initialize_theme_file_catalog() {
+    refresh_theme_file_catalog();
+}
+
+pub fn refresh_theme_file_catalog() {
+    let Ok(code_home) = code_core::config::find_code_home() else {
+        tracing::warn!("could not find code home while loading themes");
+        *FILE_THEME_CATALOG.write().unwrap() = Vec::new();
+        return;
+    };
+
+    seed_bundled_theme_files(&code_home);
+
+    let loaded = match code_core::theme_files::list_theme_files(&code_home) {
+        Ok(themes) => themes,
+        Err(error) => {
+            tracing::warn!("failed to list theme files: {error}");
+            Vec::new()
+        }
+    };
+
+    let mut catalog = loaded
+        .into_iter()
+        .map(|theme| FileThemeCatalogEntry {
+            builtin_theme: builtin_theme_from_id(&theme.id),
+            id: theme.id,
+            name: theme.name,
+            description: theme.description,
+            is_dark: theme.is_dark,
+            colors: theme.colors,
+        })
+        .collect::<Vec<_>>();
+
+    sort_theme_catalog(&mut catalog);
+    *FILE_THEME_CATALOG.write().unwrap() = catalog;
+}
+
+pub fn theme_file_catalog() -> Vec<FileThemeCatalogEntry> {
+    FILE_THEME_CATALOG.read().unwrap().clone()
+}
+
+pub fn theme_file_by_id(id: &str) -> Option<FileThemeCatalogEntry> {
+    FILE_THEME_CATALOG
+        .read()
+        .unwrap()
+        .iter()
+        .find(|theme| theme.id == id)
+        .cloned()
+}
+
+pub fn active_file_theme_id() -> Option<String> {
+    ACTIVE_FILE_THEME_ID.read().unwrap().clone()
+}
+
+pub fn set_active_file_theme_id(id: Option<String>) {
+    *ACTIVE_FILE_THEME_ID.write().unwrap() = id;
+}
+
+pub fn apply_file_theme_preview(id: &str) -> bool {
+    let Some(theme) = theme_file_by_id(id) else {
+        return false;
+    };
+
+    set_custom_theme_label(theme.name.clone());
+    set_custom_theme_colors(theme.colors.clone());
+    set_custom_theme_is_dark(Some(theme.is_dark));
+    set_active_file_theme_id(Some(theme.id.clone()));
+    init_theme(&ThemeConfig {
+        name: ThemeName::Custom,
+        colors: theme.colors,
+        label: Some(theme.name),
+        is_dark: Some(theme.is_dark),
+    });
+
+    true
+}
+
+pub fn save_custom_theme_to_file(
+    label: &str,
+    colors: &ThemeColors,
+    is_dark: Option<bool>,
+) -> Option<String> {
+    let Ok(code_home) = code_core::config::find_code_home() else {
+        return None;
+    };
+
+    let mut id = code_core::theme_files::slugify_theme_id(label);
+    if builtin_theme_from_id(&id).is_some() {
+        id = format!("custom-{id}");
+    }
+    let spec = ThemeFileSpec {
+        id: id.clone(),
+        name: label.to_string(),
+        description: "Custom theme".to_string(),
+        is_dark: is_dark.unwrap_or(false),
+        colors: colors.clone(),
+    };
+
+    let write_result = code_core::theme_files::write_theme_file(&code_home, &spec, true);
+    if let Err(error) = write_result {
+        tracing::warn!("failed to save custom theme file {id}: {error}");
+        return None;
+    }
+
+    refresh_theme_file_catalog();
+    set_active_file_theme_id(Some(id.clone()));
+    Some(id)
+}
+
+pub(crate) fn builtin_theme_from_id(id: &str) -> Option<ThemeName> {
+    match id {
+        "light-photon" => Some(ThemeName::LightPhoton),
+        "light-photon-ansi16" => Some(ThemeName::LightPhotonAnsi16),
+        "light-prism-rainbow" => Some(ThemeName::LightPrismRainbow),
+        "light-vivid-triad" => Some(ThemeName::LightVividTriad),
+        "light-porcelain" => Some(ThemeName::LightPorcelain),
+        "light-sandbar" => Some(ThemeName::LightSandbar),
+        "light-glacier" => Some(ThemeName::LightGlacier),
+        "dark-carbon-night" => Some(ThemeName::DarkCarbonNight),
+        "dark-carbon-ansi16" => Some(ThemeName::DarkCarbonAnsi16),
+        "dark-shinobi-dusk" => Some(ThemeName::DarkShinobiDusk),
+        "dark-oled-black-pro" => Some(ThemeName::DarkOledBlackPro),
+        "dark-amber-terminal" => Some(ThemeName::DarkAmberTerminal),
+        "dark-aurora-flux" => Some(ThemeName::DarkAuroraFlux),
+        "dark-charcoal-rainbow" => Some(ThemeName::DarkCharcoalRainbow),
+        "dark-zen-garden" => Some(ThemeName::DarkZenGarden),
+        "dark-paper-light-pro" => Some(ThemeName::DarkPaperLightPro),
+        _ => None,
+    }
+}
+
+fn bundled_theme_specs() -> Vec<ThemeFileSpec> {
+    let builtins = [
+        (
+            "light-photon",
+            "Light - Photon",
+            "Clean professional light theme",
+            false,
+            ThemeName::LightPhoton,
+        ),
+        (
+            "light-photon-ansi16",
+            "Light (16-color)",
+            "High-contrast light palette for limited terminals",
+            false,
+            ThemeName::LightPhotonAnsi16,
+        ),
+        (
+            "light-prism-rainbow",
+            "Light - Prism Rainbow",
+            "Vibrant rainbow accents",
+            false,
+            ThemeName::LightPrismRainbow,
+        ),
+        (
+            "light-vivid-triad",
+            "Light - Vivid Triad",
+            "Cyan, pink, amber triad",
+            false,
+            ThemeName::LightVividTriad,
+        ),
+        (
+            "light-porcelain",
+            "Light - Porcelain",
+            "Refined porcelain tones",
+            false,
+            ThemeName::LightPorcelain,
+        ),
+        (
+            "light-sandbar",
+            "Light - Sandbar",
+            "Warm sandy beach colors",
+            false,
+            ThemeName::LightSandbar,
+        ),
+        (
+            "light-glacier",
+            "Light - Glacier",
+            "Cool glacier blues",
+            false,
+            ThemeName::LightGlacier,
+        ),
+        (
+            "dark-paper-light-pro",
+            "Light - Paper Pro",
+            "Premium paper-like",
+            false,
+            ThemeName::DarkPaperLightPro,
+        ),
+        (
+            "dark-carbon-night",
+            "Dark - Carbon Night",
+            "Sleek modern dark theme",
+            true,
+            ThemeName::DarkCarbonNight,
+        ),
+        (
+            "dark-carbon-ansi16",
+            "Dark (16-color)",
+            "High-contrast dark palette for limited terminals",
+            true,
+            ThemeName::DarkCarbonAnsi16,
+        ),
+        (
+            "dark-shinobi-dusk",
+            "Dark - Shinobi Dusk",
+            "Japanese-inspired twilight",
+            true,
+            ThemeName::DarkShinobiDusk,
+        ),
+        (
+            "dark-oled-black-pro",
+            "Dark - OLED Black Pro",
+            "True black for OLED displays",
+            true,
+            ThemeName::DarkOledBlackPro,
+        ),
+        (
+            "dark-amber-terminal",
+            "Dark - Amber Terminal",
+            "Retro amber CRT aesthetic",
+            true,
+            ThemeName::DarkAmberTerminal,
+        ),
+        (
+            "dark-aurora-flux",
+            "Dark - Aurora Flux",
+            "Northern lights inspired",
+            true,
+            ThemeName::DarkAuroraFlux,
+        ),
+        (
+            "dark-charcoal-rainbow",
+            "Dark - Charcoal Rainbow",
+            "High-contrast accessible",
+            true,
+            ThemeName::DarkCharcoalRainbow,
+        ),
+        (
+            "dark-zen-garden",
+            "Dark - Zen Garden",
+            "Calm and peaceful",
+            true,
+            ThemeName::DarkZenGarden,
+        ),
+    ];
+
+    let mut specs = builtins
+        .into_iter()
+        .map(|(id, name, description, is_dark, theme_name)| ThemeFileSpec {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            is_dark,
+            colors: theme_to_theme_colors(&get_predefined_theme(theme_name)),
+        })
+        .collect::<Vec<_>>();
+
+    specs.push(ThemeFileSpec {
+        id: "gpt-neon-vault".to_string(),
+        name: "GPT Neon Vault".to_string(),
+        description: "Cyberpunk teal and magenta on midnight steel".to_string(),
+        is_dark: true,
+        colors: ThemeColors {
+            primary: Some("#2CF6FF".to_string()),
+            secondary: Some("#FF5DE1".to_string()),
+            background: Some("#070B14".to_string()),
+            foreground: Some("#DFF6FF".to_string()),
+            border: Some("#2C3E54".to_string()),
+            border_focused: Some("#3F5674".to_string()),
+            selection: Some("#112339".to_string()),
+            cursor: Some("#DFF6FF".to_string()),
+            success: Some("#2EE6A6".to_string()),
+            warning: Some("#FFC857".to_string()),
+            error: Some("#FF6B8B".to_string()),
+            info: Some("#76D6FF".to_string()),
+            text: Some("#D9EDF7".to_string()),
+            text_dim: Some("#7FA0B8".to_string()),
+            text_bright: Some("#FFFFFF".to_string()),
+            keyword: Some("#FF8CFF".to_string()),
+            string: Some("#76FFDA".to_string()),
+            comment: Some("#5D7590".to_string()),
+            function: Some("#64C9FF".to_string()),
+            spinner: Some("#20324A".to_string()),
+            progress: Some("#2CF6FF".to_string()),
+        },
+    });
+
+    specs.push(ThemeFileSpec {
+        id: "gpt-sunlit-circuit".to_string(),
+        name: "GPT Sunlit Circuit".to_string(),
+        description: "Bright editorial look with electric blue accents".to_string(),
+        is_dark: false,
+        colors: ThemeColors {
+            primary: Some("#0067FF".to_string()),
+            secondary: Some("#FF6A3D".to_string()),
+            background: Some("#F8F6F1".to_string()),
+            foreground: Some("#1F2733".to_string()),
+            border: Some("#9DA8B3".to_string()),
+            border_focused: Some("#6A7C8D".to_string()),
+            selection: Some("#E4EFFD".to_string()),
+            cursor: Some("#1F2733".to_string()),
+            success: Some("#158F5A".to_string()),
+            warning: Some("#C88900".to_string()),
+            error: Some("#D84343".to_string()),
+            info: Some("#1C84E2".to_string()),
+            text: Some("#253040".to_string()),
+            text_dim: Some("#697A8C".to_string()),
+            text_bright: Some("#02090F".to_string()),
+            keyword: Some("#4D43D8".to_string()),
+            string: Some("#0E8A79".to_string()),
+            comment: Some("#8393A3".to_string()),
+            function: Some("#0067FF".to_string()),
+            spinner: Some("#9FB0C1".to_string()),
+            progress: Some("#0067FF".to_string()),
+        },
+    });
+
+    specs.push(ThemeFileSpec {
+        id: "gpt-redline-ops".to_string(),
+        name: "GPT Redline Ops".to_string(),
+        description: "High-contrast black and red operations console".to_string(),
+        is_dark: true,
+        colors: ThemeColors {
+            primary: Some("#FF3B3B".to_string()),
+            secondary: Some("#FF8A65".to_string()),
+            background: Some("#090909".to_string()),
+            foreground: Some("#F0EDEC".to_string()),
+            border: Some("#4C3333".to_string()),
+            border_focused: Some("#6A4747".to_string()),
+            selection: Some("#1B1111".to_string()),
+            cursor: Some("#F0EDEC".to_string()),
+            success: Some("#54C77A".to_string()),
+            warning: Some("#FFB74D".to_string()),
+            error: Some("#FF5252".to_string()),
+            info: Some("#FF7F66".to_string()),
+            text: Some("#E8E2E1".to_string()),
+            text_dim: Some("#A49594".to_string()),
+            text_bright: Some("#FFFFFF".to_string()),
+            keyword: Some("#FF6B6B".to_string()),
+            string: Some("#FFB86C".to_string()),
+            comment: Some("#7C6A6A".to_string()),
+            function: Some("#FF4E4E".to_string()),
+            spinner: Some("#2B1E1E".to_string()),
+            progress: Some("#FF3B3B".to_string()),
+        },
+    });
+
+    specs
+}
+
+fn sort_theme_catalog(catalog: &mut [FileThemeCatalogEntry]) {
+    let position = |id: &str| BUILTIN_THEME_ORDER_IDS.iter().position(|known| *known == id);
+    catalog.sort_by(|a, b| match (position(&a.id), position(&b.id)) {
+        (Some(a_idx), Some(b_idx)) => a_idx.cmp(&b_idx),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+}
+
+fn seed_bundled_theme_files(code_home: &Path) {
+    let bundled = bundled_theme_specs();
+    for theme in bundled {
+        if let Err(error) = code_core::theme_files::write_theme_file(code_home, &theme, false) {
+            tracing::warn!("failed to seed bundled theme {}: {error}", theme.id);
+        }
+    }
+}
+
+fn theme_to_theme_colors(theme: &Theme) -> ThemeColors {
+    ThemeColors {
+        primary: Some(color_to_config_string(theme.primary)),
+        secondary: Some(color_to_config_string(theme.secondary)),
+        background: Some(color_to_config_string(theme.background)),
+        foreground: Some(color_to_config_string(theme.foreground)),
+        border: Some(color_to_config_string(theme.border)),
+        border_focused: Some(color_to_config_string(theme.border_focused)),
+        selection: Some(color_to_config_string(theme.selection)),
+        cursor: Some(color_to_config_string(theme.cursor)),
+        success: Some(color_to_config_string(theme.success)),
+        warning: Some(color_to_config_string(theme.warning)),
+        error: Some(color_to_config_string(theme.error)),
+        info: Some(color_to_config_string(theme.info)),
+        text: Some(color_to_config_string(theme.text)),
+        text_dim: Some(color_to_config_string(theme.text_dim)),
+        text_bright: Some(color_to_config_string(theme.text_bright)),
+        keyword: Some(color_to_config_string(theme.keyword)),
+        string: Some(color_to_config_string(theme.string)),
+        comment: Some(color_to_config_string(theme.comment)),
+        function: Some(color_to_config_string(theme.function)),
+        spinner: Some(color_to_config_string(theme.spinner)),
+        progress: Some(color_to_config_string(theme.progress)),
+    }
+}
+
+fn color_to_config_string(color: Color) -> String {
+    match color {
+        Color::Rgb(r, g, b) => format!("#{r:02X}{g:02X}{b:02X}"),
+        Color::Black => "black".to_string(),
+        Color::Red => "red".to_string(),
+        Color::Green => "green".to_string(),
+        Color::Yellow => "yellow".to_string(),
+        Color::Blue => "blue".to_string(),
+        Color::Magenta => "magenta".to_string(),
+        Color::Cyan => "cyan".to_string(),
+        Color::Gray => "gray".to_string(),
+        Color::DarkGray => "darkgray".to_string(),
+        Color::LightRed => "lightred".to_string(),
+        Color::LightGreen => "lightgreen".to_string(),
+        Color::LightYellow => "lightyellow".to_string(),
+        Color::LightBlue => "lightblue".to_string(),
+        Color::LightMagenta => "lightmagenta".to_string(),
+        Color::LightCyan => "lightcyan".to_string(),
+        Color::White => "white".to_string(),
+        Color::Indexed(idx) => {
+            let (r, g, b) = ansi256_to_rgb(idx);
+            format!("#{r:02X}{g:02X}{b:02X}")
+        }
+        Color::Reset => "#FFFFFF".to_string(),
+    }
+}
+
+fn maybe_seed_runtime_custom_theme(config: &ThemeConfig) {
+    let label_owned = config
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .unwrap_or("Custom Theme")
+        .to_string();
+    let label = label_owned.as_str();
+    if find_matching_theme_file_id(config).is_some() {
+        return;
+    }
+
+    if save_custom_theme_to_file(label, &config.colors, config.is_dark).is_none() {
+        tracing::warn!("failed to seed runtime custom theme file for {label}");
+    }
+}
+
+fn find_matching_theme_file_id(config: &ThemeConfig) -> Option<String> {
+    let trimmed_label = config.label.as_deref().map(str::trim).filter(|label| !label.is_empty());
+    theme_file_catalog()
+        .into_iter()
+        .find(|theme| {
+            if theme.colors != config.colors {
+                return false;
+            }
+            match trimmed_label {
+                Some(label) => theme.name.eq_ignore_ascii_case(label),
+                None => true,
+            }
+        })
+        .map(|theme| theme.id)
+}
+
 /// Initialize the global theme from configuration
 pub fn init_theme(config: &ThemeConfig) {
+    if matches!(config.name, ThemeName::Custom) {
+        maybe_seed_runtime_custom_theme(config);
+    }
+
     let mapped_name = map_theme_for_palette(config.name, config.is_dark);
     let mut theme = get_predefined_theme(mapped_name);
     // Important: Only apply color overrides for the Custom theme.
@@ -84,6 +578,9 @@ pub fn init_theme(config: &ThemeConfig) {
         *CUSTOM_THEME_LABEL.write().unwrap() = config.label.clone();
         *CUSTOM_THEME_COLORS.write().unwrap() = Some(config.colors.clone());
         *CUSTOM_THEME_IS_DARK.write().unwrap() = config.is_dark;
+        *ACTIVE_FILE_THEME_ID.write().unwrap() = find_matching_theme_file_id(config);
+    } else {
+        *ACTIVE_FILE_THEME_ID.write().unwrap() = None;
     }
 }
 
@@ -138,6 +635,9 @@ pub fn switch_theme(theme_name: ThemeName) {
     let mut current = CURRENT_THEME.write().unwrap();
     *current = theme.clone();
     *CURRENT_THEME_NAME.write().unwrap() = mapped_name;
+    if !matches!(theme_name, ThemeName::Custom) {
+        *ACTIVE_FILE_THEME_ID.write().unwrap() = None;
+    }
 }
 
 /// Parse a color string (hex or named color)

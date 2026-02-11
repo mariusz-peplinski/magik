@@ -28,10 +28,20 @@ use crate::thread_spawner;
 use super::BottomPane;
 use super::bottom_pane_view::BottomPaneView;
 
+#[derive(Clone)]
+struct ThemeOption {
+    theme: ThemeName,
+    file_id: Option<String>,
+    name: String,
+    description: String,
+}
+
 /// Interactive UI for selecting appearance (Theme & Spinner)
 pub(crate) struct ThemeSelectionView {
     original_theme: ThemeName, // Theme to restore on cancel
+    original_theme_file_id: Option<String>,
     current_theme: ThemeName,  // Currently displayed theme
+    current_theme_file_id: Option<String>,
     selected_theme_index: usize,
     // Spinner tab state
     _original_spinner: String,
@@ -42,6 +52,7 @@ pub(crate) struct ThemeSelectionView {
     overview_selected_index: usize, // 0 = Theme, 1 = Spinner
     // Revert points when backing out of detail views
     revert_theme_on_back: ThemeName,
+    revert_theme_file_id_on_back: Option<String>,
     revert_spinner_on_back: String,
     // One-shot flags to show selection at top on first render of detail views
     just_entered_themes: bool,
@@ -59,12 +70,34 @@ impl ThemeSelectionView {
         tail_ticket: BackgroundOrderTicket,
         before_ticket: BackgroundOrderTicket,
     ) -> Self {
+        crate::theme::refresh_theme_file_catalog();
         let current_theme = map_theme_for_palette(current_theme, custom_theme_is_dark());
         let themes = Self::get_theme_options();
-        let selected_theme_index = themes
-            .iter()
-            .position(|(t, _, _)| *t == current_theme)
-            .unwrap_or(0);
+        let active_file_theme_id = crate::theme::active_file_theme_id();
+        let selected_theme_index = if current_theme == ThemeName::Custom {
+            active_file_theme_id
+                .as_deref()
+                .and_then(|id| {
+                    themes
+                        .iter()
+                        .position(|option| option.file_id.as_deref() == Some(id))
+                })
+                .or_else(|| themes.iter().position(|option| option.theme == ThemeName::Custom))
+                .unwrap_or(0)
+        } else {
+            themes
+                .iter()
+                .position(|option| option.theme == current_theme)
+                .unwrap_or(0)
+        };
+        let current_theme_file_id = if current_theme == ThemeName::Custom {
+            themes
+                .get(selected_theme_index)
+                .and_then(|option| option.file_id.clone())
+                .or(active_file_theme_id.clone())
+        } else {
+            None
+        };
 
         // Initialize spinner selection from current runtime spinner
         let spinner_names = crate::spinner::spinner_names();
@@ -76,7 +109,9 @@ impl ThemeSelectionView {
 
         Self {
             original_theme: current_theme,
+            original_theme_file_id: active_file_theme_id.clone(),
             current_theme,
+            current_theme_file_id,
             selected_theme_index,
             _original_spinner: current_spinner_name.clone(),
             current_spinner: current_spinner_name.clone(),
@@ -84,6 +119,7 @@ impl ThemeSelectionView {
             mode: Mode::Overview,
             overview_selected_index: 0,
             revert_theme_on_back: current_theme,
+            revert_theme_file_id_on_back: active_file_theme_id,
             revert_spinner_on_back: current_spinner_name,
             just_entered_themes: false,
             just_entered_spinner: false,
@@ -94,121 +130,92 @@ impl ThemeSelectionView {
         }
     }
 
-    fn get_theme_options() -> Vec<(ThemeName, &'static str, &'static str)> {
+    fn get_theme_options() -> Vec<ThemeOption> {
         if matches!(palette_mode(), PaletteMode::Ansi16) {
             return vec![
-                (
-                    ThemeName::LightPhotonAnsi16,
-                    "Light (16-color)",
-                    "High-contrast light palette for limited terminals",
-                ),
-                (
-                    ThemeName::DarkCarbonAnsi16,
-                    "Dark (16-color)",
-                    "High-contrast dark palette for limited terminals",
-                ),
+                ThemeOption {
+                    theme: ThemeName::LightPhotonAnsi16,
+                    file_id: None,
+                    name: "Light (16-color)".to_string(),
+                    description: "High-contrast light palette for limited terminals".to_string(),
+                },
+                ThemeOption {
+                    theme: ThemeName::DarkCarbonAnsi16,
+                    file_id: None,
+                    name: "Dark (16-color)".to_string(),
+                    description: "High-contrast dark palette for limited terminals".to_string(),
+                },
             ];
         }
 
-        let mut v = vec![
-            // Light themes (at top)
-            (
-                ThemeName::LightPhoton,
-                "Light - Photon",
-                "Clean professional light theme",
-            ),
-            (
-                ThemeName::LightPrismRainbow,
-                "Light - Prism Rainbow",
-                "Vibrant rainbow accents",
-            ),
-            (
-                ThemeName::LightVividTriad,
-                "Light - Vivid Triad",
-                "Cyan, pink, amber triad",
-            ),
-            (
-                ThemeName::LightPorcelain,
-                "Light - Porcelain",
-                "Refined porcelain tones",
-            ),
-            (
-                ThemeName::LightSandbar,
-                "Light - Sandbar",
-                "Warm sandy beach colors",
-            ),
-            (
-                ThemeName::LightGlacier,
-                "Light - Glacier",
-                "Cool glacier blues",
-            ),
-            (
-                ThemeName::DarkPaperLightPro,
-                "Light - Paper Pro",
-                "Premium paper-like",
-            ),
-            // Dark themes (below)
-            (
-                ThemeName::DarkCarbonNight,
-                "Dark - Carbon Night",
-                "Sleek modern dark theme",
-            ),
-            (
-                ThemeName::DarkShinobiDusk,
-                "Dark - Shinobi Dusk",
-                "Japanese-inspired twilight",
-            ),
-            (
-                ThemeName::DarkOledBlackPro,
-                "Dark - OLED Black Pro",
-                "True black for OLED displays",
-            ),
-            (
-                ThemeName::DarkAmberTerminal,
-                "Dark - Amber Terminal",
-                "Retro amber CRT aesthetic",
-            ),
-            (
-                ThemeName::DarkAuroraFlux,
-                "Dark - Aurora Flux",
-                "Northern lights inspired",
-            ),
-            (
-                ThemeName::DarkCharcoalRainbow,
-                "Dark - Charcoal Rainbow",
-                "High-contrast accessible",
-            ),
-            (
-                ThemeName::DarkZenGarden,
-                "Dark - Zen Garden",
-                "Calm and peaceful",
-            ),
-        ];
-        // Append custom theme if available (use saved label and light/dark prefix)
-        if let Some(label0) = crate::theme::custom_theme_label() {
-            if matches!(palette_mode(), PaletteMode::Ansi16) {
-                return v;
-            }
-            // Sanitize any leading Light/Dark prefix the model may have included
-            let mut label = label0.trim().to_string();
-            for pref in ["Light - ", "Dark - ", "Light ", "Dark "] {
-                if label.starts_with(pref) {
-                    label = label[pref.len()..].trim().to_string();
-                    break;
+        let mut v = crate::theme::theme_file_catalog()
+            .into_iter()
+            .filter(|theme| {
+                !matches!(
+                    theme.builtin_theme,
+                    Some(ThemeName::LightPhotonAnsi16 | ThemeName::DarkCarbonAnsi16)
+                )
+            })
+            .map(|theme| ThemeOption {
+                theme: theme.builtin_theme.unwrap_or(ThemeName::Custom),
+                file_id: Some(theme.id),
+                name: theme.name,
+                description: theme.description,
+            })
+            .collect::<Vec<_>>();
+
+        if v.is_empty() {
+            v = vec![
+                ThemeOption {
+                    theme: ThemeName::LightPhoton,
+                    file_id: None,
+                    name: "Light - Photon".to_string(),
+                    description: "Clean professional light theme".to_string(),
+                },
+                ThemeOption {
+                    theme: ThemeName::DarkCarbonNight,
+                    file_id: None,
+                    name: "Dark - Carbon Night".to_string(),
+                    description: "Sleek modern dark theme".to_string(),
+                },
+            ];
+        }
+
+        v
+    }
+
+    fn preview_theme_option(&mut self, option: &ThemeOption) {
+        self.current_theme = option.theme;
+        if option.theme == ThemeName::Custom {
+            self.current_theme_file_id = option.file_id.clone();
+            if let Some(id) = option.file_id.as_deref() {
+                if crate::theme::apply_file_theme_preview(id) {
+                    self.app_event_tx.send(AppEvent::PreviewTheme(ThemeName::Custom));
                 }
             }
-            let name = if crate::theme::custom_theme_is_dark().unwrap_or(false) {
-                format!("Dark - {}", label)
-            } else {
-                format!("Light - {}", label)
-            };
-            v.push((
-                ThemeName::Custom,
-                Box::leak(name.into_boxed_str()),
-                "Your saved custom theme",
-            ));
+        } else {
+            self.current_theme_file_id = None;
+            crate::theme::set_active_file_theme_id(None);
+            self.app_event_tx.send(AppEvent::PreviewTheme(option.theme));
         }
-        v
+    }
+
+    fn restore_theme_revert_point(&mut self) {
+        self.current_theme = self.revert_theme_on_back;
+        self.current_theme_file_id = self.revert_theme_file_id_on_back.clone();
+        if self.current_theme == ThemeName::Custom {
+            if let Some(id) = self.current_theme_file_id.as_deref() {
+                if crate::theme::apply_file_theme_preview(id) {
+                    self.app_event_tx.send(AppEvent::PreviewTheme(ThemeName::Custom));
+                    return;
+                }
+            }
+        }
+        if self.current_theme != ThemeName::Custom {
+            crate::theme::set_active_file_theme_id(None);
+        }
+        self.app_event_tx
+            .send(AppEvent::PreviewTheme(self.current_theme));
     }
 
     fn allow_custom_theme_generation() -> bool {
@@ -220,9 +227,9 @@ impl ThemeSelectionView {
             let options = Self::get_theme_options();
             if self.selected_theme_index > 0 {
                 self.selected_theme_index -= 1;
-                self.current_theme = options[self.selected_theme_index].0;
-                self.app_event_tx
-                    .send(AppEvent::PreviewTheme(self.current_theme));
+                if let Some(option) = options.get(self.selected_theme_index) {
+                    self.preview_theme_option(option);
+                }
             }
         } else {
             let names = crate::spinner::spinner_names();
@@ -249,9 +256,9 @@ impl ThemeSelectionView {
             if self.selected_theme_index + 1 <= limit {
                 self.selected_theme_index += 1;
                 if self.selected_theme_index < options.len() {
-                    self.current_theme = options[self.selected_theme_index].0;
-                    self.app_event_tx
-                        .send(AppEvent::PreviewTheme(self.current_theme));
+                    if let Some(option) = options.get(self.selected_theme_index) {
+                        self.preview_theme_option(option);
+                    }
                 }
             }
         } else {
@@ -273,9 +280,33 @@ impl ThemeSelectionView {
     }
 
     fn confirm_theme(&mut self) {
+        if self.current_theme == ThemeName::Custom {
+            if let Some(id) = self.current_theme_file_id.as_deref() {
+                if let Some(theme) = crate::theme::theme_file_by_id(id) {
+                    if let Ok(home) = code_core::config::find_code_home() {
+                        let _ = code_core::config::set_custom_theme(
+                            &home,
+                            &theme.name,
+                            &theme.colors,
+                            true,
+                            Some(theme.is_dark),
+                        );
+                    }
+                    crate::theme::set_custom_theme_label(theme.name.clone());
+                    crate::theme::set_custom_theme_colors(theme.colors.clone());
+                    crate::theme::set_custom_theme_is_dark(Some(theme.is_dark));
+                    crate::theme::set_active_file_theme_id(Some(theme.id));
+                }
+            }
+        } else {
+            crate::theme::set_active_file_theme_id(None);
+            self.current_theme_file_id = None;
+        }
+
         self.app_event_tx
             .send(AppEvent::UpdateTheme(self.current_theme));
         self.revert_theme_on_back = self.current_theme;
+        self.revert_theme_file_id_on_back = self.current_theme_file_id.clone();
         self.mode = Mode::Overview;
     }
 
@@ -289,10 +320,10 @@ impl ThemeSelectionView {
     fn cancel_detail(&mut self) {
         match self.mode {
             Mode::Themes => {
-                if self.current_theme != self.revert_theme_on_back {
-                    self.current_theme = self.revert_theme_on_back;
-                    self.app_event_tx
-                        .send(AppEvent::PreviewTheme(self.current_theme));
+                if self.current_theme != self.revert_theme_on_back
+                    || self.current_theme_file_id != self.revert_theme_file_id_on_back
+                {
+                    self.restore_theme_revert_point();
                 }
             }
             Mode::Spinner => {
@@ -1162,6 +1193,8 @@ impl ThemeSelectionView {
                         match self.overview_selected_index {
                             0 => {
                                 self.revert_theme_on_back = self.current_theme;
+                                self.revert_theme_file_id_on_back =
+                                    self.current_theme_file_id.clone();
                                 self.mode = Mode::Themes;
                                 self.just_entered_themes = true;
                             }
@@ -1184,8 +1217,7 @@ impl ThemeSelectionView {
                         if Self::allow_custom_theme_generation()
                             && self.selected_theme_index >= count
                         {
-                            self.app_event_tx
-                                .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                            self.restore_theme_revert_point();
                             self.mode = Mode::CreateTheme(CreateThemeState {
                                 step: std::cell::Cell::new(CreateStep::Prompt),
                                 prompt: String::new(),
@@ -1356,6 +1388,7 @@ impl ThemeSelectionView {
                                         ) {
                                             crate::theme::set_custom_theme_colors(colors.clone());
                                             crate::theme::set_custom_theme_label(name.clone());
+                                            crate::theme::set_active_file_theme_id(None);
                                             crate::theme::init_theme(
                                                 &code_core::config_types::ThemeConfig {
                                                     name: ThemeName::Custom,
@@ -1366,12 +1399,7 @@ impl ThemeSelectionView {
                                             );
                                         }
                                     } else {
-                                        let fallback = if self.revert_theme_on_back == ThemeName::Custom {
-                                            ThemeName::LightPhoton
-                                        } else {
-                                            self.revert_theme_on_back
-                                        };
-                                        self.app_event_tx.send(AppEvent::PreviewTheme(fallback));
+                                        self.restore_theme_revert_point();
                                     }
                                     self.app_event_tx.send(AppEvent::RequestRedraw);
                                 } else if s.action_idx == 0 {
@@ -1393,6 +1421,11 @@ impl ThemeSelectionView {
                                         crate::theme::set_custom_theme_is_dark(
                                             s.proposed_is_dark.get(),
                                         );
+                                        let saved_theme_id = crate::theme::save_custom_theme_to_file(
+                                            &name,
+                                            &colors,
+                                            s.proposed_is_dark.get(),
+                                        );
                                         if s.preview_on.get() {
                                         crate::theme::init_theme(
                                             &code_core::config_types::ThemeConfig {
@@ -1404,11 +1437,12 @@ impl ThemeSelectionView {
                                         );
                                             self.revert_theme_on_back = ThemeName::Custom;
                                             self.current_theme = ThemeName::Custom;
+                                            self.current_theme_file_id = saved_theme_id.clone();
+                                            self.revert_theme_file_id_on_back = saved_theme_id.clone();
                                             self.app_event_tx
                                                 .send(AppEvent::UpdateTheme(ThemeName::Custom));
                                         } else {
-                                            self.app_event_tx
-                                                .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                                            self.restore_theme_revert_point();
                                         }
                                         if s.preview_on.get() {
                                             self.send_before_next_output(format!(
@@ -1430,8 +1464,7 @@ impl ThemeSelectionView {
                                     s.proposed_colors.replace(None);
                                     s.step.set(CreateStep::Prompt);
                                     self.app_event_tx.send(AppEvent::RequestRedraw);
-                                    self.app_event_tx
-                                        .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                                    self.restore_theme_revert_point();
                                 }
                             }
                         }
@@ -1449,8 +1482,7 @@ impl ThemeSelectionView {
                     self.mode = Mode::Spinner;
                 }
                 Mode::CreateTheme(_) => {
-                    self.app_event_tx
-                        .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                    self.restore_theme_revert_point();
                     self.mode = Mode::Themes;
                 }
                 _ => self.cancel_detail(),
@@ -1776,6 +1808,8 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                         match self.overview_selected_index {
                             0 => {
                                 self.revert_theme_on_back = self.current_theme;
+                                self.revert_theme_file_id_on_back =
+                                    self.current_theme_file_id.clone();
                                 self.mode = Mode::Themes;
                                 self.just_entered_themes = true;
                             }
@@ -1801,8 +1835,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                             && self.selected_theme_index >= count
                         {
                             // Revert preview to the theme before entering Themes list for better legibility
-                            self.app_event_tx
-                                .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                            self.restore_theme_revert_point();
                             self.mode = Mode::CreateTheme(CreateThemeState {
                                 step: std::cell::Cell::new(CreateStep::Prompt),
                                 prompt: String::new(),
@@ -1983,6 +2016,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                         ) {
                                             crate::theme::set_custom_theme_colors(colors.clone());
                                             crate::theme::set_custom_theme_label(name.clone());
+                                            crate::theme::set_active_file_theme_id(None);
                                             crate::theme::init_theme(
                                                 &code_core::config_types::ThemeConfig {
                                                     name: ThemeName::Custom,
@@ -1993,14 +2027,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                             );
                                         }
                                     } else {
-                                        // Revert to previous built-in or Photon if previous was Custom
-                                        let fallback =
-                                            if self.revert_theme_on_back == ThemeName::Custom {
-                                                ThemeName::LightPhoton
-                                            } else {
-                                                self.revert_theme_on_back
-                                            };
-                                        self.app_event_tx.send(AppEvent::PreviewTheme(fallback));
+                                        self.restore_theme_revert_point();
                                     }
                                     self.app_event_tx.send(AppEvent::RequestRedraw);
                                 } else if s.action_idx == 0 {
@@ -2023,6 +2050,11 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                         crate::theme::set_custom_theme_is_dark(
                                             s.proposed_is_dark.get(),
                                         );
+                                        let saved_theme_id = crate::theme::save_custom_theme_to_file(
+                                            &name,
+                                            &colors,
+                                            s.proposed_is_dark.get(),
+                                        );
                                         if s.preview_on.get() {
                                             // Keep preview and set active in UI if chosen
                                             crate::theme::init_theme(
@@ -2035,13 +2067,13 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                             );
                                             self.revert_theme_on_back = ThemeName::Custom;
                                             self.current_theme = ThemeName::Custom;
+                                            self.current_theme_file_id = saved_theme_id.clone();
+                                            self.revert_theme_file_id_on_back = saved_theme_id;
                                             self.app_event_tx
                                                 .send(AppEvent::UpdateTheme(ThemeName::Custom));
                                         } else {
                                             // Saved but not active: revert to previous theme visually
-                                            self.app_event_tx.send(AppEvent::PreviewTheme(
-                                                self.revert_theme_on_back,
-                                            ));
+                                            self.restore_theme_revert_point();
                                         }
                                         // Informative status depending on whether we set active
                                         if s.preview_on.get() {
@@ -2066,8 +2098,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                     s.step.set(CreateStep::Prompt);
                                     self.app_event_tx.send(AppEvent::RequestRedraw);
                                     // Revert to previous theme while editing
-                                    self.app_event_tx
-                                        .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                                    self.restore_theme_revert_point();
                                 }
                             }
                         }
@@ -2090,8 +2121,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                 }
                 Mode::CreateTheme(_) => {
                     // Revert preview to prior theme
-                    self.app_event_tx
-                        .send(AppEvent::PreviewTheme(self.revert_theme_on_back));
+                    self.restore_theme_revert_point();
                     self.mode = Mode::Themes;
                 }
                 _ => self.cancel_detail(),
@@ -2240,12 +2270,21 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
         if matches!(self.mode, Mode::Overview) {
             // Overview: two clear actions, also show current values
             let theme_label_owned = if self.current_theme == ThemeName::Custom {
-                crate::theme::custom_theme_label().unwrap_or_else(|| "Custom".to_string())
+                self.current_theme_file_id
+                    .as_deref()
+                    .and_then(|id| {
+                        options
+                            .iter()
+                            .find(|option| option.file_id.as_deref() == Some(id))
+                            .map(|option| option.name.clone())
+                    })
+                    .or_else(crate::theme::custom_theme_label)
+                    .unwrap_or_else(|| "Custom".to_string())
             } else {
-                Self::get_theme_options()
+                options
                     .iter()
-                    .find(|(t, _, _)| *t == self.current_theme)
-                    .map(|(_, name, _)| (*name).to_string())
+                    .find(|option| option.theme == self.current_theme)
+                    .map(|option| option.name.clone())
                     .unwrap_or_else(|| "Theme".to_string())
             };
             // Row 0: Change Theme
@@ -2364,8 +2403,12 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                     lines.push(Line::from(spans));
                     continue;
                 }
-                let (theme_enum, name, description) = &options[i];
-                let is_original = *theme_enum == self.original_theme;
+                let option = &options[i];
+                let is_original = if self.original_theme == ThemeName::Custom {
+                    option.file_id == self.original_theme_file_id
+                } else {
+                    option.theme == self.original_theme
+                };
 
                 let prefix_selected = is_selected;
                 let suffix = if is_original { " (original)" } else { "" };
@@ -2379,13 +2422,13 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
 
                 if is_selected {
                     spans.push(Span::styled(
-                        *name,
+                        option.name.as_str(),
                         Style::default()
                             .fg(theme.primary)
                             .add_modifier(Modifier::BOLD),
                     ));
                 } else {
-                    spans.push(Span::styled(*name, Style::default().fg(theme.text)));
+                    spans.push(Span::styled(option.name.as_str(), Style::default().fg(theme.text)));
                 }
 
                 spans.push(Span::styled(suffix, Style::default().fg(theme.text_dim)));
@@ -2397,7 +2440,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                 }
 
                 spans.push(Span::styled(
-                    *description,
+                    option.description.as_str(),
                     Style::default().fg(theme.text_dim),
                 ));
 
@@ -2849,6 +2892,7 @@ impl<'a> BottomPaneView<'a> for ThemeSelectionView {
                                     sm.proposed_is_dark.set(is_dark);
                                     crate::theme::set_custom_theme_label(name.clone());
                                     crate::theme::set_custom_theme_is_dark(is_dark);
+                                    crate::theme::set_active_file_theme_id(None);
                                     crate::theme::init_theme(
                                         &code_core::config_types::ThemeConfig {
                                             name: ThemeName::Custom,

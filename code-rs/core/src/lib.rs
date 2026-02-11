@@ -116,6 +116,7 @@ pub mod spawn;
 pub mod terminal;
 pub mod otel_init;
 mod text_encoding;
+pub mod theme_files;
 mod tool_apply_patch;
 mod workflow_validation;
 pub mod turn_diff_tracker;

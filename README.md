@@ -254,6 +254,10 @@ sandbox_mode = "workspace-write"
 [tui.theme]
 name = "light-photon"
 
+# Optional: file-backed themes loaded at startup and shown in /themes.
+# Create files in ~/.code/themes/*.toml with keys:
+# id, name, description, is_dark, and [colors].
+
 # Add config for specific models
 [profiles.gpt-5]
 model = "gpt-5.1"
