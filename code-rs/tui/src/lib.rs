@@ -886,7 +886,7 @@ fn print_timing_summary(summary: &str) {
 fn cleanup_session_worktrees_and_print() {
     let pid = std::process::id();
     let home = match std::env::var_os("HOME") { Some(h) => std::path::PathBuf::from(h), None => return };
-    let session_dir = home.join(".code").join("working").join("_session");
+    let session_dir = home.join(".magic").join("working").join("_session");
     let file = session_dir.join(format!("pid-{}.txt", pid));
     reclaim_worktrees_from_file(&file, "current session");
 }

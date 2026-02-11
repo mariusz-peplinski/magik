@@ -2856,7 +2856,10 @@ impl ChatWidget<'_> {
                 while let Some(dir) = higher {
                     if dir
                         .file_name()
-                        .map(|name| name == std::ffi::OsStr::new(".code"))
+                        .map(|name| {
+                            name == std::ffi::OsStr::new(".magic")
+                                || name == std::ffi::OsStr::new(".code")
+                        })
                         .unwrap_or(false)
                     {
                         return true;
@@ -10614,7 +10617,12 @@ impl ChatWidget<'_> {
     /// Push a cell using a synthetic key at the TOP of the NEXT request.
     fn history_push_top_next_req(&mut self, cell: impl HistoryCell + 'static) {
         let key = self.next_req_key_top();
-        let _ = self.history_insert_with_key_global_tagged(Box::new(cell), key, "prelude", None);
+        let tag = if cell.kind() == HistoryCellType::BackgroundEvent {
+            "background"
+        } else {
+            "prelude"
+        };
+        let _ = self.history_insert_with_key_global_tagged(Box::new(cell), key, tag, None);
     }
     fn history_replace_with_record(
         &mut self,

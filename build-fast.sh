@@ -14,7 +14,7 @@ Environment flags:
   DETERMINISTIC=1                     Add -C debuginfo=0; promotes to release-prod unless DETERMINISTIC_FORCE_RELEASE=0
   DETERMINISTIC_FORCE_RELEASE=0|1     Keep dev-fast (0) or switch to release-prod (1, default)
   DETERMINISTIC_NO_UUID=1             macOS only: strip LC_UUID on final executables
-  BUILD_FAST_BINS="code code-tui"      Override bins to build (space or comma separated)
+  BUILD_FAST_BINS="magic code-tui"     Override bins to build (space or comma separated)
   --workspace codex|code|both         Select workspace to build (default: code)
 
 Examples:
@@ -185,7 +185,10 @@ else
   CALLER_CWD="$(pwd)"
 fi
 
-if [[ "${SCRIPT_DIR}" == */.code/working/*/branches/* ]]; then
+if [[ "${SCRIPT_DIR}" == */.magic/working/*/branches/* ]]; then
+  WORKTREE_PARENT="${SCRIPT_DIR%/branches/*}"
+  REPO_NAME="$(basename "${WORKTREE_PARENT}")"
+elif [[ "${SCRIPT_DIR}" == */.code/working/*/branches/* ]]; then
   WORKTREE_PARENT="${SCRIPT_DIR%/branches/*}"
   REPO_NAME="$(basename "${WORKTREE_PARENT}")"
 else
@@ -220,9 +223,9 @@ elif [ -n "${CODEX_HOME:-}" ] && [ -n "${CODEX_HOME}" ]; then
   CACHE_HOME="${CODEX_HOME%/}"
 else
   if [ -d "/mnt/data" ] && [ -w "/mnt/data" ]; then
-    CACHE_HOME="/mnt/data/.code"
+    CACHE_HOME="/mnt/data/.magic"
   else
-    CACHE_HOME="${REPO_ROOT}/.code"
+    CACHE_HOME="${REPO_ROOT}/.magic"
   fi
 fi
 case "${CACHE_HOME}" in
@@ -305,8 +308,12 @@ echo "Cache bucket: ${CACHE_KEY} (${CACHE_KEY_SOURCE})"
 CLI_PACKAGE="$(sed -En 's/^name[[:space:]]*=[[:space:]]*"(.*)"/\1/p' cli/Cargo.toml | head -n1)"
 TUI_PACKAGE="$(sed -En 's/^name[[:space:]]*=[[:space:]]*"(.*)"/\1/p' tui/Cargo.toml | head -n1)"
 EXEC_PACKAGE="$(sed -En 's/^name[[:space:]]*=[[:space:]]*"(.*)"/\1/p' exec/Cargo.toml | head -n1)"
-CRATE_PREFIX="${CLI_PACKAGE%%-*}"
-EXEC_BIN="$(awk 'BEGIN{inbin=0} /^\[\[bin\]\]/{inbin=1; next} inbin && /^name[[:space:]]*=/{gsub(/.*"/,"",$0); gsub(/"/,"",$0); print; exit}' exec/Cargo.toml)"
+CLI_PRIMARY_BIN="$(awk 'BEGIN{inbin=0} /^\[\[bin\]\]/{inbin=1; next} inbin && /^name *=/{split($0, parts, "\""); print parts[2]; exit}' cli/Cargo.toml)"
+if [ -z "${CLI_PRIMARY_BIN}" ]; then
+  CLI_PRIMARY_BIN="${CLI_PACKAGE%%-*}"
+fi
+CRATE_PREFIX="${CLI_PRIMARY_BIN}"
+EXEC_BIN="$(awk 'BEGIN{inbin=0} /^\[\[bin\]\]/{inbin=1; next} inbin && /^name *=/{split($0, parts, "\""); print parts[2]; exit}' exec/Cargo.toml)"
 if [ -z "${EXEC_BIN}" ]; then
   EXEC_BIN="${EXEC_PACKAGE}"
 fi

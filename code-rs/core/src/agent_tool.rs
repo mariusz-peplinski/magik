@@ -121,7 +121,7 @@ fn current_code_binary_path() -> Result<std::path::PathBuf, String> {
     }
 
     Err(format!(
-        "Current code binary is missing on disk ({}). It may have been deleted while running. Rebuild with ./build-fast.sh or reinstall 'code' to continue.",
+        "Current magic binary is missing on disk ({}). It may have been deleted while running. Rebuild with ./build-fast.sh or reinstall 'magic' to continue.",
         exe.display()
     ))
 }
@@ -143,11 +143,11 @@ fn fallback_code_binary_path() -> Option<std::path::PathBuf> {
 
     // Probe likely build outputs in priority order.
     let mut candidates = vec![
-        workspace.join("target/dev-fast/code"),
-        workspace.join("target/debug/code"),
-        workspace.join("target/release-prod/code"),
-        workspace.join("target/release/code"),
-        workspace.join("bin/code"),
+        workspace.join("target/dev-fast/magic"),
+        workspace.join("target/debug/magic"),
+        workspace.join("target/release-prod/magic"),
+        workspace.join("target/release/magic"),
+        workspace.join("bin/magic"),
     ];
 
     if let Some(found) = candidates.iter().find(|p| p.exists()).cloned() {

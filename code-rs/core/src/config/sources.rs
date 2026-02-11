@@ -1478,7 +1478,7 @@ fn env_overrides_present() -> bool {
 
 fn default_code_home_dir() -> Option<PathBuf> {
     let mut path = home_dir()?;
-    path.push(".code");
+    path.push(".magic");
     Some(path)
 }
 
@@ -1547,7 +1547,7 @@ pub fn resolve_code_path_for_read(code_home: &Path, relative: &Path) -> PathBuf 
 
 /// Returns the path to the Code/Codex configuration directory, which can be
 /// specified by the `CODE_HOME` or `CODEX_HOME` environment variables. If not set,
-/// defaults to `~/.code` for the fork.
+/// defaults to `~/.magic` for the fork.
 ///
 /// - If `CODE_HOME` or `CODEX_HOME` is set, the value will be canonicalized and this
 ///   function will Err if the path does not exist.
@@ -1569,7 +1569,7 @@ pub fn find_code_home() -> std::io::Result<PathBuf> {
     })?;
 
     let mut write_path = home;
-    write_path.push(".code");
+    write_path.push(".magic");
     Ok(write_path)
 }
 

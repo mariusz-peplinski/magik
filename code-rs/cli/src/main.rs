@@ -40,7 +40,7 @@ mod mcp_cmd;
 
 use crate::mcp_cmd::McpCli;
 
-const CLI_COMMAND_NAME: &str = "code";
+const CLI_COMMAND_NAME: &str = "magic";
 pub(crate) const CODEX_SECURE_MODE_ENV_VAR: &str = "CODEX_SECURE_MODE";
 
 /// As early as possible in the process lifecycle, apply hardening measures
@@ -68,14 +68,14 @@ fn pre_main_hardening() {
 #[derive(Debug, Parser)]
 #[clap(
     author,
-    name = "code",
+    name = "magic",
     version = code_version::version(),
     // If a sub‑command is given, ignore requirements of the default args.
     subcommand_negates_reqs = true,
     // The executable is sometimes invoked via a platform‑specific name like
     // `codex-x86_64-unknown-linux-musl`, but the help output should always use
-    // the generic `code` command name that users run.
-    bin_name = "code"
+    // the generic `magic` command name that users run.
+    bin_name = "magic"
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -249,7 +249,7 @@ struct BridgeTailCommand {
     #[arg(long, default_value = "info", value_parser = ["errors", "warn", "info", "trace"])]
     level: String,
 
-    /// Bridge target to use (index from `code bridge list` or metadata path).
+    /// Bridge target to use (index from `magic bridge list` or metadata path).
     #[arg(long = "bridge", value_name = "PATH|INDEX")]
     bridge: Option<String>,
 
@@ -264,7 +264,7 @@ struct BridgeScreenshotCommand {
     #[arg(long, default_value_t = 10)]
     timeout: u64,
 
-    /// Bridge target to use (index from `code bridge list` or metadata path).
+    /// Bridge target to use (index from `magic bridge list` or metadata path).
     #[arg(long = "bridge", value_name = "PATH|INDEX")]
     bridge: Option<String>,
 }
@@ -278,7 +278,7 @@ struct BridgeJavascriptCommand {
     #[arg(long, default_value_t = 10)]
     timeout: u64,
 
-    /// Bridge target to use (index from `code bridge list` or metadata path).
+    /// Bridge target to use (index from `magic bridge list` or metadata path).
     #[arg(long = "bridge", value_name = "PATH|INDEX")]
     bridge: Option<String>,
 }
@@ -667,7 +667,7 @@ fn run_bridge_subscription(cmd: BridgeSubscriptionCommand) -> anyhow::Result<()>
         if override_path.exists() {
             fs::remove_file(&override_path).context("failed to remove subscription override")?;
             println!(
-                "Removed {}. The running Code session will revert to defaults (errors only) within a few seconds.",
+                "Removed {}. The running Magic session will revert to defaults (errors only) within a few seconds.",
                 override_path.display()
             );
         } else {
@@ -682,7 +682,7 @@ fn run_bridge_subscription(cmd: BridgeSubscriptionCommand) -> anyhow::Result<()>
         println!("levels       : {}", sub.levels.join(", "));
         println!("capabilities : {}", sub.capabilities.join(", "));
         println!("llm_filter   : {}", sub.llm_filter);
-        println!("(Running Code picks up changes every ~5s.)");
+        println!("(Running Magic picks up changes every ~5s.)");
         return Ok(());
     }
 
@@ -708,7 +708,7 @@ fn run_bridge_subscription(cmd: BridgeSubscriptionCommand) -> anyhow::Result<()>
     println!("levels       : {}", sub.levels.join(", "));
     println!("capabilities : {}", sub.capabilities.join(", "));
     println!("llm_filter   : {}", sub.llm_filter);
-    println!("Running Code session will resubscribe within ~5s.");
+    println!("Running Magic session will resubscribe within ~5s.");
     Ok(())
 }
 
@@ -879,7 +879,7 @@ fn select_bridge_target(selector: Option<&str>) -> anyhow::Result<bridge::Bridge
     }
 
     anyhow::bail!(
-        "No bridge matched '{selector}'. Use `code bridge list` to see available bridges."
+        "No bridge matched '{selector}'. Use `magic bridge list` to see available bridges."
     );
 }
 
@@ -1066,7 +1066,7 @@ fn apply_resume_directives(
         }
         (None, true) => {
             let path = resolve_resume_path(None, true)?
-                .ok_or_else(|| anyhow!("No recent sessions found to resume. Start a session with `code` first."))?;
+                .ok_or_else(|| anyhow!("No recent sessions found to resume. Start a session with `magic` first."))?;
             interactive.resume_last = true;
             push_experimental_resume_override(interactive, &path);
         }
@@ -1297,9 +1297,12 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
     // Try to download the best asset for this platform; prefer .tar.gz on Unix and .zip on Windows; fallback to .zst.
     let mut urls: Vec<String> = vec![];
     if cfg!(windows) {
+        urls.push(format!("{base}/magic-x86_64-pc-windows-msvc.exe.zip"));
         urls.push(format!("{base}/code-x86_64-pc-windows-msvc.exe.zip"));
     } else {
         // tar.gz first, then zst
+        urls.push(format!("{base}/magic-{target}.tar.gz"));
+        urls.push(format!("{base}/magic-{target}.zst"));
         urls.push(format!("{base}/code-{target}.tar.gz"));
         urls.push(format!("{base}/code-{target}.zst"));
     }
@@ -1331,7 +1334,7 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
     }
 
     // Determine output directory
-    // Default: ~/.code/bin
+    // Default: ~/.magic/bin
     let out_dir = if let Some(dir) = args.out_dir {
         dir
     } else {
@@ -1343,7 +1346,7 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
         let base = home
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        base.join(".code").join("bin")
+        base.join(".magic").join("bin")
     };
     let _ = fs::create_dir_all(&out_dir);
 
@@ -1361,8 +1364,16 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
             let mut ar = tar::Archive::new(gz);
             ar.unpack(&out_dir)?;
             // Find extracted binary
-            let bin = first_match(&out_dir, "code-").unwrap_or(out_dir.join("code"));
-            let dest_name = format!("{}-{}", bin.file_name().and_then(|s| s.to_str()).unwrap_or("code"), slug);
+            let bin = first_match(&out_dir, "magic-")
+                .or_else(|| first_match(&out_dir, "code-"))
+                .unwrap_or_else(|| {
+                    if out_dir.join("magic").exists() {
+                        out_dir.join("magic")
+                    } else {
+                        out_dir.join("code")
+                    }
+                });
+            let dest_name = format!("{}-{}", bin.file_name().and_then(|s| s.to_str()).unwrap_or("magic"), slug);
             let dest = out_dir.join(dest_name);
             // Rename/move to include PR number suffix
             let _ = fs::rename(&bin, &dest).or_else(|_| { fs::copy(&bin, &dest).map(|_| () ) });
@@ -1377,14 +1388,22 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
             let f = fs::File::open(&path)?;
             let mut z = ZipArchive::new(f)?;
             z.extract(&out_dir)?;
-            let exe = first_match(&out_dir, "code-").unwrap_or(out_dir.join("code.exe"));
+            let exe = first_match(&out_dir, "magic-")
+                .or_else(|| first_match(&out_dir, "code-"))
+                .unwrap_or_else(|| {
+                    if out_dir.join("magic.exe").exists() {
+                        out_dir.join("magic.exe")
+                    } else {
+                        out_dir.join("code.exe")
+                    }
+                });
             // Append slug before extension if present
             let dest = match exe.extension().and_then(|e| e.to_str()) {
                 Some(ext) => {
-                    let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("code");
+                    let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("magic");
                     out_dir.join(format!("{}-{}.{}", stem, slug, ext))
                 }
-                None => out_dir.join(format!("{}-{}", exe.file_name().and_then(|s| s.to_str()).unwrap_or("code"), slug)),
+                None => out_dir.join(format!("{}-{}", exe.file_name().and_then(|s| s.to_str()).unwrap_or("magic"), slug)),
             };
             let _ = fs::rename(&exe, &dest).or_else(|_| { fs::copy(&exe, &dest).map(|_| () ) });
             println!("Downloaded preview to {}", dest.display());
@@ -1400,15 +1419,15 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
         }
     }
 
-    // Fallback: raw 'code' file (after .zst) if present
+    // Fallback: raw 'magic' file (after .zst) if present
     if path.file_name().and_then(|s| s.to_str()).map(|n| n.ends_with(".zst")).unwrap_or(false) {
-        // Try to decompress .zst to 'code'
+        // Try to decompress .zst to 'magic'
         if which::which("zstd").is_ok() {
-            // Derive base name from archive (e.g., code-aarch64-apple-darwin.zst -> code-aarch64-apple-darwin-<slug>.{exe?})
+            // Derive base name from archive (e.g., magic-aarch64-apple-darwin.zst -> magic-aarch64-apple-darwin-<slug>.{exe?})
             let stem = path
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .unwrap_or("code");
+                .unwrap_or("magic");
             let dest = if cfg!(windows) { out_dir.join(format!("{}-{}.exe", stem, slug)) } else { out_dir.join(format!("{}-{}", stem, slug)) };
             let status = std::process::Command::new("zstd").arg("-d").arg(&path).arg("-o").arg(&dest).status()?;
             if status.success() {
@@ -1420,7 +1439,7 @@ async fn preview_main(args: PreviewArgs) -> anyhow::Result<()> {
         }
         // If zstd missing, tell the user
         bail!("Downloaded .zst but 'zstd' is not installed. Install zstd or download the .tar.gz/.zip asset instead.");
-    } else if let Some(bin) = first_match(tmp.path(), "code") {
+    } else if let Some(bin) = first_match(tmp.path(), "magic").or_else(|| first_match(tmp.path(), "code")) {
         let dest = out_dir.join(bin.file_name().unwrap_or_default());
         fs::copy(&bin, &dest)?;
         make_exec(&dest);
@@ -1441,7 +1460,7 @@ async fn doctor_main() -> anyhow::Result<()> {
     let exe = std::env::current_exe()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "<unknown>".to_string());
-    println!("code version: {}", code_version::version());
+    println!("magic version: {}", code_version::version());
     println!("current_exe: {}", exe);
 
     // PATH
@@ -1475,21 +1494,16 @@ async fn doctor_main() -> anyhow::Result<()> {
         }
     };
 
-    // Gather candidates for code/coder
-    let code_paths = which_all("code").await;
-    let coder_paths = which_all("coder").await;
+    // Gather candidates for magic
+    let magic_paths = which_all("magic").await;
 
-    println!("\nFound 'code' on PATH (in order):");
-    if code_paths.is_empty() {
+    println!("\nFound 'magic' on PATH (in order):");
+    if magic_paths.is_empty() {
         println!("  <none>");
     } else {
-        for p in &code_paths { println!("  {}", p); }
-    }
-    println!("\nFound 'coder' on PATH (in order):");
-    if coder_paths.is_empty() {
-        println!("  <none>");
-    } else {
-        for p in &coder_paths { println!("  {}", p); }
+        for p in &magic_paths {
+            println!("  {}", p);
+        }
     }
 
     // Try to run --version for each resolved binary to show where mismatches come from
@@ -1504,8 +1518,7 @@ async fn doctor_main() -> anyhow::Result<()> {
             }
         }
     }
-    show_versions("code --version by path", &code_paths).await;
-    show_versions("coder --version by path", &coder_paths).await;
+    show_versions("magic --version by path", &magic_paths).await;
 
     // Detect Bun shims
     let bun_home = env::var("BUN_INSTALL").ok().or_else(|| {
@@ -1513,26 +1526,10 @@ async fn doctor_main() -> anyhow::Result<()> {
     });
     if let Some(bun) = bun_home {
         let bun_bin = format!("{}/bin", bun);
-        let bun_coder = format!("{}/coder", bun_bin);
-        if coder_paths.iter().any(|p| p == &bun_coder) {
-            println!("\nBun shim detected for 'coder': {}", bun_coder);
+        let bun_magic = format!("{}/magic", bun_bin);
+        if magic_paths.iter().any(|p| p == &bun_magic) {
+            println!("\nBun shim detected for 'magic': {}", bun_magic);
             println!("Suggestion: remove old Bun global with: bun remove -g @just-every/code");
-        }
-        let bun_code = format!("{}/code", bun_bin);
-        if code_paths.iter().any(|p| p == &bun_code) {
-            println!("Bun shim detected for 'code': {}", bun_code);
-            println!("Suggestion: prefer 'coder' or remove Bun shim if it conflicts.");
-        }
-    }
-
-    // Detect Homebrew overshadow of VS Code
-    #[cfg(target_os = "macos")]
-    {
-        let brew_code = code_paths.iter().find(|p| p.contains("/homebrew/bin/code") || p.contains("/Cellar/code/"));
-        let vscode_code = code_paths.iter().find(|p| p.contains("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"));
-        if brew_code.is_some() && vscode_code.is_some() {
-            println!("\nHomebrew 'code' precedes VS Code CLI in PATH.");
-            println!("Suggestion: uninstall Homebrew formula 'code' (brew uninstall code) or reorder PATH so /usr/local/bin comes before /usr/local/homebrew/bin.");
         }
     }
 
@@ -1549,8 +1546,7 @@ async fn doctor_main() -> anyhow::Result<()> {
     println!("\nIf versions differ, remove older installs and keep one package manager:");
     println!("  - Bun: bun remove -g @just-every/code");
     println!("  - npm/pnpm: npm uninstall -g @just-every/code");
-    println!("  - Homebrew: brew uninstall code");
-    println!("  - Prefer using 'coder' to avoid conflicts with VS Code's 'code'.");
+    println!("  - Homebrew: brew uninstall magic");
 
     Ok(())
 }
