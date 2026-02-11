@@ -364,6 +364,12 @@ const ANSI16_COLORS: [(u8, u8, u8); 16] = [
 ];
 
 pub(crate) fn palette_mode() -> PaletteMode {
+    // NOTE: Theme picker availability currently hinges on the same truecolor
+    // probe used here (`has_16m`). In environments where rendering works but
+    // capability probing is conservative (e.g., some terminal+WSL combos), we
+    // may still collapse to Ansi16 and show only two themes.
+    // Potential follow-up: distinguish "theme catalog depth" from truecolor and
+    // allow full presets when ANSI-256 is available even if `has_16m` is false.
     if let Some(level) = supports_color::on_cached(supports_color::Stream::Stdout) {
         if level.has_16m {
             return PaletteMode::Ansi256;

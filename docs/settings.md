@@ -14,7 +14,7 @@ Full-screen settings panel for Every Code’s TUI. Use it to change models, them
 
 ## Sections
 - **Model**: pick the default chat model and reasoning effort.
-- **Theme**: choose a theme and spinner; applies immediately.
+- **Theme**: choose a theme and spinner; applies immediately. If you only see two 16-color themes, Code detected an ANSI16 palette for your terminal session.
 - **Updates**: view upgrade channel/status. `/update` opens here before running installers.
 - **Agents**: see built-in/custom agents, enable/disable, force read-only, add per-agent instructions. Open the Subagent editor to configure `/plan`/`/solve`/`/code` or custom slash commands.
 - **Prompts**: edit saved prompt snippets.

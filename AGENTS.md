@@ -29,6 +29,20 @@ When debugging regressions or bugs, write a failing test (or targeted reproducti
 - Do not document minor or non-core features; focus on system-critical flows and expectations.
 - Never commit temporary "working" docs, plans, or scratch notes.
 
+## Repository navigation
+
+- Start with `CODEMAP.md` for a high-signal map of top-level directories, Rust
+  crates, key entrypoints, and common change routes.
+- For visual/TUI work, use the `TUI Visual Architecture`, `Theming and visual
+  language`, and `UI Docs Index` sections in `CODEMAP.md` first; they map
+  startup animations, header/footer composition, message rendering, and theme
+  plumbing to concrete files.
+- Keep `CODEMAP.md` updated whenever ownership boundaries change (new crate,
+  moved module, renamed entrypoint, or major workflow relocation).
+- In this repo, `AGENTS.md` and `agents.md` are hardlinked copies, and
+  `CLAUDE.md` is a symlink to `AGENTS.md`; updating `AGENTS.md` updates the
+  effective agent guidance across all three filenames.
+
 ## Strict Ordering In The TUI History
 
 The TUI enforces strict, per‑turn ordering for all streamed content. Every
