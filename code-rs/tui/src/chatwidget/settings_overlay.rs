@@ -433,6 +433,10 @@ impl ReviewSettingsContent {
     pub(crate) fn set_auto_review_followups(&mut self, attempts: u32) {
         self.view.set_auto_review_followups(attempts);
     }
+
+    pub(crate) fn set_git_snapshots_enabled(&mut self, enabled: bool) {
+        self.view.set_git_snapshots_enabled(enabled);
+    }
 }
 
 impl SettingsContent for ReviewSettingsContent {

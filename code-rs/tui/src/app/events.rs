@@ -1642,6 +1642,11 @@ impl App<'_> {
                         widget.set_auto_review_enabled(enabled);
                     }
                 }
+                AppEvent::UpdateGitSnapshotsEnabled(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_git_snapshots_enabled(enabled);
+                    }
+                }
                 AppEvent::UpdateReviewAutoResolveAttempts(attempts) => {
                     if let AppState::Chat { widget } = &mut self.app_state {
                         widget.set_review_auto_resolve_attempts(attempts);

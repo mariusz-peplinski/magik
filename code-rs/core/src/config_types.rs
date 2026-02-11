@@ -709,6 +709,10 @@ pub struct Tui {
     /// Run a background `/review` after turns that modify code.
     #[serde(default = "default_true")]
     pub auto_review_enabled: bool,
+
+    /// Capture Git ghost snapshots for `/undo` and snapshot-scoped review flows.
+    #[serde(default = "default_true")]
+    pub git_snapshots_enabled: bool,
 }
 
 // Important: Provide a manual Default so that when no config file exists and we
@@ -730,6 +734,7 @@ impl Default for Tui {
             alternate_screen: true,
             review_auto_resolve: true,
             auto_review_enabled: true,
+            git_snapshots_enabled: true,
         }
     }
 }

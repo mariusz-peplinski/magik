@@ -20,6 +20,7 @@ const DEFAULT_VISIBLE_ROWS: usize = 8;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum SelectionKind {
     ReviewEnabled,
+    GitSnapshotsEnabled,
     ReviewModel,
     ReviewResolveModel,
     ReviewAttempts,
@@ -32,6 +33,7 @@ enum SelectionKind {
 enum RowData {
     SectionReview,
     ReviewEnabled,
+    GitSnapshotsEnabled,
     ReviewModel,
     ReviewResolveModel,
     ReviewAttempts,
@@ -50,6 +52,7 @@ pub(crate) struct ReviewSettingsView {
     review_resolve_model: String,
     review_resolve_reasoning: ReasoningEffort,
     review_auto_resolve_enabled: bool,
+    git_snapshots_enabled: bool,
     review_followups: u32,
     review_followups_index: usize,
 
@@ -117,6 +120,10 @@ impl ReviewSettingsView {
         self.review_followups = attempts;
     }
 
+    pub fn set_git_snapshots_enabled(&mut self, enabled: bool) {
+        self.git_snapshots_enabled = enabled;
+    }
+
     pub fn set_auto_review_followups(&mut self, attempts: u32) {
         if let Some(idx) = AutoResolveAttemptLimit::ALLOWED
             .iter()
@@ -136,6 +143,7 @@ impl ReviewSettingsView {
         review_resolve_model: String,
         review_resolve_reasoning: ReasoningEffort,
         review_auto_resolve_enabled: bool,
+        git_snapshots_enabled: bool,
         review_followups: u32,
         auto_review_enabled: bool,
         auto_review_use_chat_model: bool,
@@ -173,6 +181,7 @@ impl ReviewSettingsView {
             review_resolve_model,
             review_resolve_reasoning,
             review_auto_resolve_enabled,
+            git_snapshots_enabled,
             review_followups,
             review_followups_index,
             auto_review_enabled,
@@ -196,6 +205,12 @@ impl ReviewSettingsView {
         self.review_auto_resolve_enabled = !self.review_auto_resolve_enabled;
         self.app_event_tx
             .send(AppEvent::UpdateReviewAutoResolveEnabled(self.review_auto_resolve_enabled));
+    }
+
+    fn toggle_git_snapshots_enabled(&mut self) {
+        self.git_snapshots_enabled = !self.git_snapshots_enabled;
+        self.app_event_tx
+            .send(AppEvent::UpdateGitSnapshotsEnabled(self.git_snapshots_enabled));
     }
 
     fn adjust_review_followups(&mut self, forward: bool) {
@@ -280,6 +295,7 @@ impl ReviewSettingsView {
         let rows = vec![
             RowData::SectionReview,
             RowData::ReviewEnabled,
+            RowData::GitSnapshotsEnabled,
             RowData::ReviewModel,
             RowData::ReviewResolveModel,
             RowData::ReviewAttempts,
@@ -289,9 +305,10 @@ impl ReviewSettingsView {
             RowData::AutoReviewResolveModel,
             RowData::AutoReviewAttempts,
         ];
-        let selection_rows = vec![1, 2, 3, 4, 6, 7, 8, 9];
+        let selection_rows = vec![1, 2, 3, 4, 5, 7, 8, 9, 10];
         let selection_kinds = vec![
             SelectionKind::ReviewEnabled,
+            SelectionKind::GitSnapshotsEnabled,
             SelectionKind::ReviewModel,
             SelectionKind::ReviewResolveModel,
             SelectionKind::ReviewAttempts,
@@ -397,6 +414,37 @@ impl ReviewSettingsView {
                 ];
                 if selected {
                     let hint = if self.review_auto_resolve_enabled {
+                        "(press Enter to disable)"
+                    } else {
+                        "(press Enter to enable)"
+                    };
+                    spans.push(Span::raw("  "));
+                    spans.push(Span::styled(hint, Style::default().fg(colors::text_dim())));
+                }
+                Line::from(spans)
+            }
+            RowData::GitSnapshotsEnabled => {
+                let label_style = if selected {
+                    Style::default()
+                        .fg(colors::primary())
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(colors::text()).add_modifier(Modifier::BOLD)
+                };
+                let status_span = if self.git_snapshots_enabled {
+                    Span::styled("On", Style::default().fg(colors::success()))
+                } else {
+                    Span::styled("Off", Style::default().fg(colors::text_dim()))
+                };
+                let mut spans = vec![
+                    Span::styled(arrow, arrow_style),
+                    Span::styled("Git snapshots", label_style),
+                    Span::raw("  "),
+                    status_span,
+                    Span::raw("  (/undo + review scope snapshots)"),
+                ];
+                if selected {
+                    let hint = if self.git_snapshots_enabled {
                         "(press Enter to disable)"
                     } else {
                         "(press Enter to enable)"
@@ -686,6 +734,7 @@ impl ReviewSettingsView {
                 if let Some(kind) = current_kind {
                     match kind {
                         SelectionKind::ReviewEnabled => self.toggle_review_auto_resolve(),
+                        SelectionKind::GitSnapshotsEnabled => self.toggle_git_snapshots_enabled(),
                         SelectionKind::ReviewAttempts => self.adjust_review_followups(false),
                         SelectionKind::AutoReviewEnabled => self.toggle_auto_review(),
                         SelectionKind::AutoReviewAttempts => {
@@ -702,6 +751,7 @@ impl ReviewSettingsView {
                 if let Some(kind) = current_kind {
                     match kind {
                         SelectionKind::ReviewEnabled => self.toggle_review_auto_resolve(),
+                        SelectionKind::GitSnapshotsEnabled => self.toggle_git_snapshots_enabled(),
                         SelectionKind::ReviewAttempts => self.adjust_review_followups(true),
                         SelectionKind::AutoReviewEnabled => self.toggle_auto_review(),
                         SelectionKind::AutoReviewAttempts => {
@@ -719,6 +769,7 @@ impl ReviewSettingsView {
                 if let Some(kind) = current_kind {
                     match kind {
                         SelectionKind::ReviewEnabled => self.toggle_review_auto_resolve(),
+                        SelectionKind::GitSnapshotsEnabled => self.toggle_git_snapshots_enabled(),
                         SelectionKind::ReviewAttempts => self.adjust_review_followups(true),
                         SelectionKind::ReviewModel => self.open_review_model_selector(),
                         SelectionKind::ReviewResolveModel => {
@@ -783,7 +834,7 @@ impl<'a> BottomPaneView<'a> for ReviewSettingsView {
 
         let header_lines = vec![
             Line::from(Span::styled(
-                "Configure /review and Auto Review models, resolve models, and follow-ups.",
+                "Configure /review and Auto Review models, snapshots, and follow-ups.",
                 Style::default().fg(colors::text_dim()),
             )),
             Line::from(Span::styled(

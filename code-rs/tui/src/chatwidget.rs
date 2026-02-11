@@ -11786,7 +11786,7 @@ impl ChatWidget<'_> {
     }
 
     fn capture_ghost_snapshot(&mut self, summary: Option<String>) -> GhostSnapshotJobHandle {
-        if self.ghost_snapshots_disabled {
+        if !self.config.tui.git_snapshots_enabled || self.ghost_snapshots_disabled {
             return GhostSnapshotJobHandle::Skipped;
         }
 
@@ -11799,7 +11799,7 @@ impl ChatWidget<'_> {
     }
 
     fn capture_ghost_snapshot_blocking(&mut self, summary: Option<String>) -> Option<GhostSnapshot> {
-        if self.ghost_snapshots_disabled {
+        if !self.config.tui.git_snapshots_enabled || self.ghost_snapshots_disabled {
             return None;
         }
 
@@ -11951,7 +11951,7 @@ impl ChatWidget<'_> {
     }
 
     fn spawn_next_ghost_snapshot(&mut self) {
-        if self.ghost_snapshots_disabled {
+        if !self.config.tui.git_snapshots_enabled || self.ghost_snapshots_disabled {
             self.ghost_snapshot_queue.clear();
             return;
         }
@@ -12050,6 +12050,10 @@ impl ChatWidget<'_> {
         result: Result<GhostCommit, GitToolingError>,
         elapsed: Duration,
     ) -> Option<GhostSnapshot> {
+        if !self.config.tui.git_snapshots_enabled {
+            return None;
+        }
+
         match result {
             Ok(commit) => {
                 self.ghost_snapshots_disabled = false;
@@ -12258,6 +12262,18 @@ impl ChatWidget<'_> {
     }
 
     pub(crate) fn handle_undo_command(&mut self) {
+        if !self.config.tui.git_snapshots_enabled {
+            let message = "/undo unavailable: Git snapshots are disabled in /settings review.";
+            self.push_background_tail(message.to_string());
+            self.show_undo_status_popup(
+                "Snapshots disabled",
+                Some("Restores workspace files only. Conversation history remains unchanged.".to_string()),
+                Some("Enable Git snapshots in /settings review to use /undo.".to_string()),
+                vec![message.to_string()],
+            );
+            return;
+        }
+
         if self.ghost_snapshots_disabled {
             let reason = self
                 .ghost_snapshots_disabled_reason
@@ -12889,6 +12905,13 @@ impl ChatWidget<'_> {
         restore_files: bool,
         restore_conversation: bool,
     ) {
+        if !self.config.tui.git_snapshots_enabled {
+            self.push_background_tail(
+                "Undo restore unavailable because Git snapshots are disabled in /settings review.".to_string(),
+            );
+            return;
+        }
+
         let Some(commit_id) = commit else {
             self.push_background_tail("No snapshot selected.".to_string());
             return;
@@ -16743,6 +16766,7 @@ impl ChatWidget<'_> {
             self.config.review_resolve_model.clone(),
             self.config.review_resolve_model_reasoning_effort,
             auto_resolve_enabled,
+            self.config.tui.git_snapshots_enabled,
             attempts,
             auto_review_enabled,
             self.config.auto_review_use_chat_model,
@@ -19426,6 +19450,11 @@ Have we met every part of this goal and is there no further work to do?"#
             return;
         }
 
+        if !self.config.tui.git_snapshots_enabled {
+            self.auto_turn_review_state = None;
+            return;
+        }
+
         let read_only = self
             .pending_auto_turn_config
             .as_ref()
@@ -19471,6 +19500,12 @@ Have we met every part of this goal and is there no further work to do?"#
         message: &'static str,
         parent: Option<&GhostCommit>,
     ) -> Result<GhostCommit, GitToolingError> {
+        if !self.config.tui.git_snapshots_enabled {
+            return Err(GitToolingError::Io(io::Error::other(
+                "git snapshots are disabled in settings",
+            )));
+        }
+
         #[cfg(test)]
         if let Some(stub) = CAPTURE_AUTO_TURN_COMMIT_STUB.lock().unwrap().as_ref() {
             let parent_id = parent.map(|commit| commit.id().to_string());
@@ -19508,6 +19543,11 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 
     fn spawn_auto_review_baseline_capture(&mut self) {
+        if !self.config.tui.git_snapshots_enabled {
+            self.auto_review_baseline = None;
+            return;
+        }
+
         let turn_sequence = self.turn_sequence;
         let repo_path = self.config.cwd.clone();
         let app_event_tx = self.app_event_tx.clone();
@@ -24331,10 +24371,11 @@ Have we met every part of this goal and is there no further work to do?"#
         };
 
         Some(format!(
-            "/review: {} · Resolve: {} · Follow-ups: {} · Auto Review: {} ({} · resolve {} · follow-ups {})",
+            "/review: {} · Resolve: {} · Follow-ups: {} · Snapshots: {} · Auto Review: {} ({} · resolve {} · follow-ups {})",
             review_model_label,
             review_resolve_label,
             attempts,
+            Self::on_off_label(self.config.tui.git_snapshots_enabled),
             Self::on_off_label(self.config.tui.auto_review_enabled),
             auto_review_model_label,
             auto_review_resolve_label,
@@ -29428,6 +29469,23 @@ async fn run_background_review(
     turn_context: Option<String>,
     prefer_fallback: bool,
 ) {
+    if !config.tui.git_snapshots_enabled {
+        app_event_tx.send(AppEvent::BackgroundReviewFinished {
+            worktree_path: std::path::PathBuf::new(),
+            branch: String::new(),
+            has_findings: false,
+            findings: 0,
+            summary: Some(
+                "Auto review skipped: Git snapshots are disabled in /settings review."
+                    .to_string(),
+            ),
+            error: None,
+            agent_id: None,
+            snapshot: None,
+        });
+        return;
+    }
+
     // Best-effort: clean up any stale lock left by a cancelled review process.
     let _ = code_core::review_coord::clear_stale_lock_if_dead(Some(&config.cwd));
 
@@ -34117,6 +34175,52 @@ impl ChatWidget<'_> {
         self.request_redraw();
     }
 
+    pub(crate) fn set_git_snapshots_enabled(&mut self, enabled: bool) {
+        if self.config.tui.git_snapshots_enabled == enabled {
+            return;
+        }
+
+        self.config.tui.git_snapshots_enabled = enabled;
+        if !enabled {
+            self.ghost_snapshot_queue.clear();
+            self.pending_auto_review_range = None;
+            self.auto_review_baseline = None;
+        }
+
+        let message = if let Ok(home) = code_core::config::find_code_home() {
+            match code_core::config::set_tui_git_snapshots_enabled(&home, enabled) {
+                Ok(_) => {
+                    tracing::info!("Persisted git snapshots toggle: {enabled}");
+                    if enabled {
+                        "Git snapshots enabled."
+                    } else {
+                        "Git snapshots disabled. /undo and snapshot-scoped review flows are unavailable."
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to persist git snapshots toggle: {e}");
+                    if enabled {
+                        "Git snapshots enabled for this session (failed to persist)."
+                    } else {
+                        "Git snapshots disabled for this session (failed to persist)."
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("Could not locate Codex home to persist git snapshots toggle");
+            if enabled {
+                "Git snapshots enabled for this session."
+            } else {
+                "Git snapshots disabled for this session."
+            }
+        };
+
+        self.bottom_pane.flash_footer_notice(message.to_string());
+        self.refresh_settings_overview_rows();
+        self.update_review_settings_model_row();
+        self.request_redraw();
+    }
+
     fn auto_review_git_root(&self) -> Option<PathBuf> {
         self.run_git_command(["rev-parse", "--show-toplevel"], |stdout| {
             let root = stdout.lines().next().unwrap_or("").trim();
@@ -34179,6 +34283,9 @@ impl ChatWidget<'_> {
 
     fn maybe_trigger_auto_review(&mut self) {
         if !self.config.tui.auto_review_enabled {
+            return;
+        }
+        if !self.config.tui.git_snapshots_enabled {
             return;
         }
         self.recover_stuck_background_review();
@@ -35082,6 +35189,7 @@ impl ChatWidget<'_> {
                 content.set_auto_review_followups(
                     self.config.auto_drive.auto_review_followup_attempts.get(),
                 );
+                content.set_git_snapshots_enabled(self.config.tui.git_snapshots_enabled);
             }
         }
     }

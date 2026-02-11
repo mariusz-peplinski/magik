@@ -84,6 +84,7 @@ pub use sources::{
     set_review_resolve_model,
     set_tui_alternate_screen,
     set_tui_auto_review_enabled,
+    set_tui_git_snapshots_enabled,
     set_tui_notifications,
     set_tui_review_auto_resolve,
     set_tui_spinner_name,

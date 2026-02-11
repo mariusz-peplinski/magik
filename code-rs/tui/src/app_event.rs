@@ -336,6 +336,8 @@ pub(crate) enum AppEvent {
     UpdateReviewAutoResolveEnabled(bool),
     /// Enable or disable background Auto Review
     UpdateAutoReviewEnabled(bool),
+    /// Enable or disable Git ghost snapshots used by `/undo` and review scopes
+    UpdateGitSnapshotsEnabled(bool),
     /// Set the maximum number of Auto Resolve re-review attempts
     UpdateReviewAutoResolveAttempts(u32),
     /// Set the maximum number of Auto Review follow-up reviews
