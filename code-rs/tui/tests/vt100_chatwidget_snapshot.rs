@@ -1125,6 +1125,30 @@ fn baseline_simple_conversation() {
 }
 
 #[test]
+fn block_type_labels_render_for_user_reasoning_and_response() {
+    let mut harness = ChatWidgetHarness::new();
+    harness.set_show_block_type_labels(true);
+
+    harness.push_user_prompt("Why are my block labels missing?");
+    harness.push_reasoning_markdown(
+        "reasoning-1",
+        "I should check whether the label row is inserted for custom-rendered cells.",
+    );
+    harness.push_assistant_markdown("Fixed: block labels now render for USER/THINKING/RESPONSE.");
+
+    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 24));
+    assert!(output.contains("[USER]"), "expected USER label; got:\n{output}");
+    assert!(
+        output.contains("[THINKING]"),
+        "expected THINKING label; got:\n{output}"
+    );
+    assert!(
+        output.contains("[RESPONSE]"),
+        "expected RESPONSE label; got:\n{output}"
+    );
+}
+
+#[test]
 fn scroll_spacing_remains_when_scrolled_up() {
     let mut harness = ChatWidgetHarness::new();
 

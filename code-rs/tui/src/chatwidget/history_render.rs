@@ -474,6 +474,21 @@ impl HistoryRenderState {
                     (0, HeightSource::Unknown, None)
                 };
 
+                // Block-type labels are injected into cached layouts via `RenderRequest::build_lines`,
+                // but custom-rendered cells bypass that path.
+                let height = if settings.block_type_labels_visible
+                    && settings.width > 0
+                    && has_custom_render
+                    && req
+                        .cell
+                        .and_then(|cell| block_type_label_for_cell_kind(cell.kind()))
+                        .is_some()
+                {
+                    height.saturating_add(1)
+                } else {
+                    height
+                };
+
                 VisibleCell {
                     cell: req.cell,
                     assistant_plan,
@@ -641,20 +656,27 @@ fn build_cached_row(line: &Line<'static>, target_width: usize) -> Box<[BufferCel
 
 /// Settings that affect layout caching. Any change to these fields invalidates
 /// the cached `CachedLayout` entries keyed by `(HistoryId, width, theme_epoch,
-/// reasoning_visible)`.
+/// reasoning_visible, block_type_labels_visible)`.
 #[derive(Clone, Copy)]
 pub(crate) struct RenderSettings {
     pub width: u16,
     pub theme_epoch: u64,
     pub reasoning_visible: bool,
+    pub block_type_labels_visible: bool,
 }
 
 impl RenderSettings {
-    pub fn new(width: u16, theme_epoch: u64, reasoning_visible: bool) -> Self {
+    pub fn new(
+        width: u16,
+        theme_epoch: u64,
+        reasoning_visible: bool,
+        block_type_labels_visible: bool,
+    ) -> Self {
         Self {
             width,
             theme_epoch,
             reasoning_visible,
+            block_type_labels_visible,
         }
     }
 }
@@ -764,7 +786,7 @@ fn block_type_label_for_request(
     }
 }
 
-fn block_type_label_for_cell_kind(kind: HistoryCellType) -> Option<&'static str> {
+pub(crate) fn block_type_label_for_cell_kind(kind: HistoryCellType) -> Option<&'static str> {
     match kind {
         HistoryCellType::Plain => None,
         HistoryCellType::User => Some("USER"),
@@ -833,6 +855,7 @@ pub(crate) struct CacheKey {
     width: u16,
     theme_epoch: u64,
     reasoning_visible: bool,
+    block_type_labels_visible: bool,
 }
 
 impl CacheKey {
@@ -842,6 +865,7 @@ impl CacheKey {
             width: settings.width,
             theme_epoch: settings.theme_epoch,
             reasoning_visible: settings.reasoning_visible,
+            block_type_labels_visible: settings.block_type_labels_visible,
         }
     }
 }

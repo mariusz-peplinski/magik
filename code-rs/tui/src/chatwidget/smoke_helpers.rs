@@ -5,6 +5,7 @@ use crate::app_event::{AppEvent, AutoContinueMode};
 use crate::app_event_sender::AppEventSender;
 use crate::history_cell::{self, HistoryCellType};
 use crate::markdown_render::render_markdown_text;
+use crate::streaming::StreamKind;
 use crate::tui::TerminalInfo;
 use crate::bottom_pane::SettingsSection;
 use crossterm::event::KeyEvent;
@@ -493,6 +494,18 @@ impl ChatWidgetHarness {
         lines.extend(rendered.lines.drain(..));
         let state = history_cell::plain_message_state_from_lines(lines, HistoryCellType::Assistant);
         self.chat.history_push_plain_state(state);
+    }
+
+    pub fn push_reasoning_markdown(&mut self, stream_id: impl Into<String>, markdown: impl Into<String>) {
+        let markdown = markdown.into();
+        let mut rendered = render_markdown_text(&markdown);
+        let id = Some(stream_id.into());
+        self.chat
+            .insert_history_lines_with_kind(StreamKind::Reasoning, id, rendered.lines.drain(..).collect());
+    }
+
+    pub fn set_show_block_type_labels(&mut self, enabled: bool) {
+        self.chat.set_show_block_type_labels(enabled);
     }
 
     pub fn auto_drive_activate(

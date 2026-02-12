@@ -138,6 +138,7 @@ use self::rate_limit_refresh::{
 };
 use self::history_render::{
     CachedLayout, HistoryRenderState, RenderRequest, RenderRequestKind, RenderSettings, VisibleCell,
+    block_type_label_for_cell_kind,
 };
 use code_core::parse_command::ParsedCommand;
 use code_core::{AutoDriveMode, AutoDrivePidFile};
@@ -6589,7 +6590,7 @@ impl ChatWidget<'_> {
             git_init_declined: false,
             pending_upgrade_notice: None,
             history_render: HistoryRenderState::new(),
-            last_render_settings: Cell::new(RenderSettings::new(0, 0, false)),
+            last_render_settings: Cell::new(RenderSettings::new(0, 0, false, false)),
             render_theme_epoch: 0,
             history_state: HistoryState::new(),
             history_snapshot_dirty: false,
@@ -6965,7 +6966,7 @@ impl ChatWidget<'_> {
             git_init_declined: false,
             pending_upgrade_notice: None,
             history_render: HistoryRenderState::new(),
-            last_render_settings: Cell::new(RenderSettings::new(0, 0, false)),
+            last_render_settings: Cell::new(RenderSettings::new(0, 0, false, false)),
             render_theme_epoch: 0,
             history_state: HistoryState::new(),
             history_snapshot_dirty: false,
@@ -38959,7 +38960,12 @@ impl WidgetRef for &ChatWidget<'_> {
             p.frames = p.frames.saturating_add(1);
         }
 
-        let render_settings = RenderSettings::new(cache_width, self.render_theme_epoch, reasoning_visible);
+        let render_settings = RenderSettings::new(
+            cache_width,
+            self.render_theme_epoch,
+            reasoning_visible,
+            self.config.tui.show_block_type_labels,
+        );
         self.last_render_settings.set(render_settings);
         if self.history_frozen_count > 0
             && self.history_frozen_width != render_settings.width
@@ -39803,6 +39809,12 @@ impl WidgetRef for &ChatWidget<'_> {
                 let is_animating = item.is_animating();
                 let has_custom = item.has_custom_render();
 
+                let block_label = if render_settings.block_type_labels_visible {
+                    block_type_label_for_cell_kind(item.kind())
+                } else {
+                    None
+                };
+
                 if is_animating || has_custom {
                     tracing::debug!(
                         ">>> RENDERING ANIMATION Cell[{}]: area={:?}, skip_rows={}",
@@ -39824,6 +39836,24 @@ impl WidgetRef for &ChatWidget<'_> {
                         }
                         handled_assistant = true;
                         layout_for_render = None;
+
+                        if let Some(label) = block_label {
+                            // AssistantMarkdownCell already reserves a blank top padding row (when
+                            // visible) for alignment; reuse it for the block label without changing
+                            // the overall height.
+                            if skip_rows == 0 && item_area.height > 1 && item_area.width > 0 {
+                                let cell_bg = if assistant.state().mid_turn {
+                                    crate::colors::assistant_mid_turn_bg()
+                                } else {
+                                    crate::colors::assistant_bg()
+                                };
+                                let style = Style::default()
+                                    .fg(crate::colors::function())
+                                    .bg(cell_bg)
+                                    .add_modifier(Modifier::BOLD);
+                                buf.set_string(item_area.x, item_area.y, format!("[{label}]"), style);
+                            }
+                        }
                     }
                 }
 
@@ -39837,7 +39867,50 @@ impl WidgetRef for &ChatWidget<'_> {
                             skip_rows,
                         );
                     } else {
-                        item.render_with_skip(item_area, buf, skip_rows);
+                        if let Some(label) = block_label
+                            && has_custom
+                            && item_area.width > 0
+                        {
+                            let cell_bg = if is_auto_review {
+                                crate::history_cell::PlainHistoryCell::auto_review_bg()
+                            } else {
+                                crate::colors::background()
+                            };
+                            let label_style = Style::default()
+                                .fg(crate::colors::function())
+                                .bg(cell_bg)
+                                .add_modifier(Modifier::BOLD);
+
+                            if skip_rows == 0 {
+                                let label_area = Rect {
+                                    x: item_area.x,
+                                    y: item_area.y,
+                                    width: item_area.width,
+                                    height: 1,
+                                };
+                                fill_rect(
+                                    buf,
+                                    label_area,
+                                    Some(' '),
+                                    Style::default().bg(cell_bg).fg(crate::colors::text()),
+                                );
+                                buf.set_string(item_area.x, item_area.y, format!("[{label}]"), label_style);
+
+                                let content_area = Rect {
+                                    x: item_area.x,
+                                    y: item_area.y.saturating_add(1),
+                                    width: item_area.width,
+                                    height: item_area.height.saturating_sub(1),
+                                };
+                                if content_area.height > 0 {
+                                    item.render_with_skip(content_area, buf, 0);
+                                }
+                            } else {
+                                item.render_with_skip(item_area, buf, skip_rows.saturating_sub(1));
+                            }
+                        } else {
+                            item.render_with_skip(item_area, buf, skip_rows);
+                        }
                     }
                 }
 
