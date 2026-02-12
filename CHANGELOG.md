@@ -7,6 +7,38 @@
 
 - (none)
 
+## [0.6.65] - 2026-02-11
+
+- CLI/Env: stop traversing parent .env files at startup. (04c45da1)
+- CLI/Env: exclude more provider keys from project dotenv. (3127a576)
+
+## [0.6.64] - 2026-02-11
+
+- TUI: normalize agent alias slugs in summary counts. (b8449aeb)
+- Core: default Codex to gpt-5.3 and align CLI checks. (9807d30d)
+
+## [0.6.63] - 2026-02-11
+
+- Core: support multiple rate limits. (fdd0cd1d)
+- Core/Protocol: add websocket preference and rate-limit metadata; serialize rate-limit ids as nullable. (c6cf7ff9, 807615dc)
+- Core/Websocket: avoid resending output items and tighten incrementality checks. (44731479, 0639c338)
+- TUI: queue rollback trims in app-event order and keep history recall cursor at line end. (8b46c0ce, e704f488)
+- Exec Policy: reject empty command lists and honor never-prompt approval policy. (cc8c2933, 693bac18)
+
+## [0.6.62] - 2026-02-11
+
+- App Server: add app-server support for client connections. (b86fcd5d)
+- App Server: wire the Linux sandbox executable into config. (6032603f)
+- Model Routing: surface reroute warnings and status models. (6dc748e8)
+- Core/Agents: resolve Claude from home fallback paths. (c560d6ac)
+
+## [0.6.61] - 2026-02-10
+
+- Core: align auth token schema and websocket errors. (12612630)
+- Sandbox: enforce proxy-aware network routing in sandbox. (3391e5ea)
+- Skills: add SkillPolicy metadata with allow_implicit_invocation support. (91704c56)
+- App Server: use chatgpt_account_id/chatgpt_plan_type for external auth. (53741013)
+
 ## [0.6.60] - 2026-02-07
 
 - Core/Version: enforce minimum wire-compatible version and derive it from the announcement tip. (a058583f, e52d8212)

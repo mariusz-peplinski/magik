@@ -91,6 +91,9 @@ pub enum Op {
     /// This server sends [`EventMsg::TurnAborted`] in response.
     Interrupt,
 
+    /// Terminate all running background terminal processes for this thread.
+    CleanBackgroundTerminals,
+
     /// Legacy user input.
     ///
     /// Prefer [`Op::UserTurn`] so the caller provides full turn context
@@ -195,6 +198,9 @@ pub enum Op {
     ExecApproval {
         /// The id of the submission we are approving
         id: String,
+        /// Turn id associated with the approval event, when available.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        turn_id: Option<String>,
         /// The user's decision in response to the request.
         decision: ReviewDecision,
     },
@@ -879,6 +885,10 @@ pub enum EventMsg {
     CollabCloseBegin(CollabCloseBeginEvent),
     /// Collab interaction: close end.
     CollabCloseEnd(CollabCloseEndEvent),
+    /// Collab interaction: resume begin.
+    CollabResumeBegin(CollabResumeBeginEvent),
+    /// Collab interaction: resume end.
+    CollabResumeEnd(CollabResumeEndEvent),
 }
 
 impl From<CollabAgentSpawnBeginEvent> for EventMsg {
@@ -926,6 +936,18 @@ impl From<CollabCloseBeginEvent> for EventMsg {
 impl From<CollabCloseEndEvent> for EventMsg {
     fn from(event: CollabCloseEndEvent) -> Self {
         EventMsg::CollabCloseEnd(event)
+    }
+}
+
+impl From<CollabResumeBeginEvent> for EventMsg {
+    fn from(event: CollabResumeBeginEvent) -> Self {
+        EventMsg::CollabResumeBegin(event)
+    }
+}
+
+impl From<CollabResumeEndEvent> for EventMsg {
+    fn from(event: CollabResumeEndEvent) -> Self {
+        EventMsg::CollabResumeEnd(event)
     }
 }
 
@@ -1130,11 +1152,13 @@ pub struct ContextCompactedEvent;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnCompleteEvent {
+    pub turn_id: String,
     pub last_agent_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnStartedEvent {
+    pub turn_id: String,
     // TODO(aibrahim): make this not optional
     pub model_context_window: Option<i64>,
     #[serde(default)]
@@ -1227,6 +1251,8 @@ pub struct TokenCountEvent {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
 pub struct RateLimitSnapshot {
+    pub limit_id: Option<String>,
+    pub limit_name: Option<String>,
     pub primary: Option<RateLimitWindow>,
     pub secondary: Option<RateLimitWindow>,
     pub credits: Option<CreditsSnapshot>,
@@ -1718,6 +1744,8 @@ impl From<CompactedItem> for ResponseItem {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, TS)]
 pub struct TurnContextItem {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
     pub cwd: PathBuf,
     pub approval_policy: AskForApproval,
     pub sandbox_policy: SandboxPolicy,
@@ -2246,6 +2274,13 @@ pub struct SkillsListEntry {
     pub errors: Vec<SkillErrorInfo>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS, PartialEq, Eq)]
+pub struct SessionNetworkProxyRuntime {
+    pub http_addr: String,
+    pub socks_addr: String,
+    pub admin_addr: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct SessionConfiguredEvent {
     pub session_id: ThreadId,
@@ -2286,6 +2321,11 @@ pub struct SessionConfiguredEvent {
     /// When present, UIs can use these to seed the history.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_messages: Option<Vec<EventMsg>>,
+
+    /// Runtime proxy bind addresses, when the managed proxy was started for this session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub network_proxy: Option<SessionNetworkProxyRuntime>,
 
     /// Path in which the rollout is stored. Can be `None` for ephemeral threads
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2368,6 +2408,7 @@ pub struct Chunk {
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnAbortedEvent {
+    pub turn_id: Option<String>,
     pub reason: TurnAbortReason,
 }
 
@@ -2473,6 +2514,29 @@ pub struct CollabCloseEndEvent {
     pub receiver_thread_id: ThreadId,
     /// Last known status of the receiver agent reported to the sender agent before
     /// the close.
+    pub status: AgentStatus,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
+pub struct CollabResumeBeginEvent {
+    /// Identifier for the collab tool call.
+    pub call_id: String,
+    /// Thread ID of the sender.
+    pub sender_thread_id: ThreadId,
+    /// Thread ID of the receiver.
+    pub receiver_thread_id: ThreadId,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
+pub struct CollabResumeEndEvent {
+    /// Identifier for the collab tool call.
+    pub call_id: String,
+    /// Thread ID of the sender.
+    pub sender_thread_id: ThreadId,
+    /// Thread ID of the receiver.
+    pub receiver_thread_id: ThreadId,
+    /// Last known status of the receiver agent reported to the sender agent after
+    /// resume.
     pub status: AgentStatus,
 }
 
@@ -2633,6 +2697,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn turn_aborted_event_deserializes_without_turn_id() -> Result<()> {
+        let event: EventMsg = serde_json::from_value(json!({
+            "type": "turn_aborted",
+            "reason": "interrupted",
+        }))?;
+
+        match event {
+            EventMsg::TurnAborted(TurnAbortedEvent { turn_id, reason }) => {
+                assert_eq!(turn_id, None);
+                assert_eq!(reason, TurnAbortReason::Interrupted);
+            }
+            _ => panic!("expected turn_aborted event"),
+        }
+
+        Ok(())
+    }
+
     /// Serialize Event to verify that its JSON representation has the expected
     /// amount of nesting.
     #[test]
@@ -2654,6 +2736,7 @@ mod tests {
                 history_log_id: 0,
                 history_entry_count: 0,
                 initial_messages: None,
+                network_proxy: None,
                 rollout_path: Some(rollout_file.path().to_path_buf()),
             }),
         };

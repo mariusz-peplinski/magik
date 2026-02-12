@@ -103,7 +103,11 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             ],
             supported_text_verbosity: &[TextVerbosityConfig::Medium],
             is_default: true,
-            upgrade: None,
+            upgrade: Some(ModelUpgrade {
+                id: "gpt-5.3-codex".to_string(),
+                reasoning_effort_mapping: None,
+                migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
+            }),
             show_in_picker: true,
         },
         ModelPreset {
@@ -140,7 +144,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -236,7 +240,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: &[TextVerbosityConfig::Medium],
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -266,7 +270,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -292,7 +296,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -325,7 +329,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -355,7 +359,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -380,7 +384,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -417,7 +421,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
             is_default: false,
             upgrade: Some(ModelUpgrade {
-                id: "gpt-5.2-codex".to_string(),
+                id: "gpt-5.3-codex".to_string(),
                 reasoning_effort_mapping: None,
                 migration_config_key: HIDE_GPT_5_2_CODEX_MIGRATION_PROMPT_CONFIG.to_string(),
             }),
@@ -455,6 +459,7 @@ fn find_preset_for_model(model: &str) -> Option<&'static ModelPreset> {
 
 fn reasoning_effort_rank(effort: ReasoningEffort) -> u8 {
     match effort {
+        ReasoningEffort::None => 0,
         ReasoningEffort::Minimal => 0,
         ReasoningEffort::Low => 1,
         ReasoningEffort::Medium => 2,

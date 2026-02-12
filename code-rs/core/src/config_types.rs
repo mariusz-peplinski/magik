@@ -1495,6 +1495,7 @@ impl Default for RetentionConfig {
 impl From<code_protocol::config_types::ReasoningEffort> for ReasoningEffort {
     fn from(v: code_protocol::config_types::ReasoningEffort) -> Self {
         match v {
+            code_protocol::config_types::ReasoningEffort::None => ReasoningEffort::None,
             code_protocol::config_types::ReasoningEffort::Minimal => ReasoningEffort::Minimal,
             code_protocol::config_types::ReasoningEffort::Low => ReasoningEffort::Low,
             code_protocol::config_types::ReasoningEffort::Medium => ReasoningEffort::Medium,
