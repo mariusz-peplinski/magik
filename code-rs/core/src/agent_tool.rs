@@ -121,7 +121,7 @@ fn current_code_binary_path() -> Result<std::path::PathBuf, String> {
     }
 
     Err(format!(
-        "Current magic binary is missing on disk ({}). It may have been deleted while running. Rebuild with ./build-fast.sh or reinstall 'magic' to continue.",
+        "Current magik binary is missing on disk ({}). It may have been deleted while running. Rebuild with ./build-fast.sh or reinstall 'magik' to continue.",
         exe.display()
     ))
 }
@@ -143,6 +143,12 @@ fn fallback_code_binary_path() -> Option<std::path::PathBuf> {
 
     // Probe likely build outputs in priority order.
     let mut candidates = vec![
+        workspace.join("target/dev-fast/magik"),
+        workspace.join("target/debug/magik"),
+        workspace.join("target/release-prod/magik"),
+        workspace.join("target/release/magik"),
+        workspace.join("bin/magik"),
+        // Legacy binary name.
         workspace.join("target/dev-fast/magic"),
         workspace.join("target/debug/magic"),
         workspace.join("target/release-prod/magic"),

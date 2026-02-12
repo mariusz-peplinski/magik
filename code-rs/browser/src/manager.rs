@@ -112,7 +112,7 @@ fn resolve_chrome_log_path() -> Option<PathBuf> {
     let base = if let Ok(home) = std::env::var("CODE_HOME").or_else(|_| std::env::var("CODEX_HOME")) {
         PathBuf::from(home).join("debug_logs")
     } else if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(home).join(".magic").join("debug_logs")
+        PathBuf::from(home).join(".magik").join("debug_logs")
     } else {
         return Some(std::env::temp_dir().join("code-chrome.log"));
     };

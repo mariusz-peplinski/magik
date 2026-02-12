@@ -42,7 +42,7 @@ impl SettingsSection {
         match self {
             SettingsSection::Model => "Model",
             SettingsSection::Theme => "Theme",
-            SettingsSection::Magic => "Magic Settings",
+            SettingsSection::Magic => "Magik Settings",
             SettingsSection::Planning => "Planning",
             SettingsSection::Updates => "Updates",
             SettingsSection::Accounts => "Accounts",
@@ -63,7 +63,7 @@ impl SettingsSection {
         match self {
             SettingsSection::Model => "Choose the language model used for new completions.",
             SettingsSection::Theme => "Switch between preset color palettes and adjust contrast.",
-            SettingsSection::Magic => "Custom Magic features and UI toggles.",
+            SettingsSection::Magic => "Custom Magik features and UI toggles.",
             SettingsSection::Planning => "Choose the model used in Plan Mode (Read Only).",
             SettingsSection::Updates => "Control CLI auto-update cadence and release channels.",
             SettingsSection::Accounts => {
@@ -86,7 +86,7 @@ impl SettingsSection {
         match self {
             SettingsSection::Model => "Model settings coming soon.",
             SettingsSection::Theme => "Theme settings coming soon.",
-            SettingsSection::Magic => "Magic settings coming soon.",
+            SettingsSection::Magic => "Magik settings coming soon.",
             SettingsSection::Planning => "Planning settings coming soon.",
             SettingsSection::Updates => "Upgrade Codex and manage automatic updates.",
             SettingsSection::Accounts => "Account switching settings coming soon.",
@@ -108,7 +108,7 @@ impl SettingsSection {
             "model" | "models" => Some(SettingsSection::Model),
             "skill" | "skills" => Some(SettingsSection::Skills),
             "theme" | "themes" => Some(SettingsSection::Theme),
-            "magic" => Some(SettingsSection::Magic),
+            "magik" | "magic" => Some(SettingsSection::Magic),
             "planning" | "plan" => Some(SettingsSection::Planning),
             "update" | "updates" => Some(SettingsSection::Updates),
             "account" | "accounts" | "auth" => Some(SettingsSection::Accounts),

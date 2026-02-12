@@ -8,7 +8,7 @@ use tokio::process::Command;
 
 use crate::review_coord::bump_snapshot_epoch_for;
 
-/// Returns the `/.../.magic/branches/<worktree>` root when `path` resides inside a branch worktree.
+/// Returns the `/.../.magik/branches/<worktree>` root when `path` resides inside a branch worktree.
 pub fn branch_worktree_root(path: &Path) -> Option<PathBuf> {
     use std::ffi::OsStr;
 
@@ -25,7 +25,9 @@ pub fn branch_worktree_root(path: &Path) -> Option<PathBuf> {
                 if dir
                     .file_name()
                     .map(|name| {
-                        name == OsStr::new(".magic") || name == OsStr::new(".code")
+                        name == OsStr::new(".magik")
+                            || name == OsStr::new(".magic")
+                            || name == OsStr::new(".code")
                     })
                     .unwrap_or(false)
                 {
@@ -40,7 +42,7 @@ pub fn branch_worktree_root(path: &Path) -> Option<PathBuf> {
     candidate
 }
 
-/// Returns true when `path` resides inside a `/.../.magic/branches/<worktree>` directory.
+/// Returns true when `path` resides inside a `/.../.magik/branches/<worktree>` directory.
 pub fn is_branch_worktree_path(path: &Path) -> bool {
     branch_worktree_root(path).is_some()
 }
@@ -124,7 +126,7 @@ pub async fn get_git_root_from(cwd: &Path) -> Result<PathBuf, String> {
     }
 }
 
-/// Create a new worktree for `branch_id` under `<git_root>/.magic/branches/<branch_id>`.
+/// Create a new worktree for `branch_id` under `<git_root>/.magik/branches/<branch_id>`.
 /// When `base_ref` is provided, the worktree is created from that commit/ref so
 /// subsequent mutations in the primary working tree cannot affect the agent's
 /// view. If `base_ref` is `None`, the worktree is created from the current
@@ -135,20 +137,20 @@ pub async fn setup_worktree(
     branch_id: &str,
     base_ref: Option<&str>,
 ) -> Result<(PathBuf, String), String> {
-    // Global location: ~/.magic/working/<repo_name>/branches
+    // Global location: ~/.magik/working/<repo_name>/branches
     let repo_name = git_root
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("repo");
     let mut code_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     code_dir = code_dir
-        .join(".magic")
+        .join(".magik")
         .join("working")
         .join(repo_name)
         .join("branches");
     tokio::fs::create_dir_all(&code_dir)
         .await
-        .map_err(|e| format!("Failed to create .magic/branches directory: {}", e))?;
+        .map_err(|e| format!("Failed to create .magik/branches directory: {}", e))?;
 
     let mut effective_branch = branch_id.to_string();
     let mut worktree_path = code_dir.join(&effective_branch);
@@ -321,20 +323,20 @@ pub async fn prepare_reusable_worktree(
     base_ref: &str,
     keep_gitignored: bool,
 ) -> Result<PathBuf, String> {
-    // Global location: ~/.magic/working/<repo_name>/branches
+    // Global location: ~/.magik/working/<repo_name>/branches
     let repo_name = git_root
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("repo");
     let mut code_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     code_dir = code_dir
-        .join(".magic")
+        .join(".magik")
         .join("working")
         .join(repo_name)
         .join("branches");
     tokio::fs::create_dir_all(&code_dir)
         .await
-        .map_err(|e| format!("Failed to create .magic/branches directory: {}", e))?;
+        .map_err(|e| format!("Failed to create .magik/branches directory: {}", e))?;
 
     let worktree_path = code_dir.join(worktree_name);
 
@@ -451,8 +453,8 @@ async fn prune_stale_worktrees(git_root: &Path) -> Result<(), String> {
 async fn record_worktree_in_session(git_root: &Path, worktree_path: &Path) {
     let pid = std::process::id();
     let mut base = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    // Global session registry: ~/.magic/working/_session
-    base = base.join(".magic").join("working").join("_session");
+    // Global session registry: ~/.magik/working/_session
+    base = base.join(".magik").join("working").join("_session");
     if let Err(_e) = tokio::fs::create_dir_all(&base).await { return; }
     let file = base.join(format!("pid-{}.txt", pid));
     // Store git_root and worktree_path separated by a tab; one entry per line.
@@ -564,7 +566,7 @@ fn metadata_file_path(worktree_path: &Path) -> Option<PathBuf> {
     let canonical = canonical_worktree_path(worktree_path)?;
     let mut base = dirs::home_dir()?;
     base = base
-        .join(".magic")
+        .join(".magik")
         .join("working")
         .join(BRANCH_METADATA_DIR);
     let key = canonical.to_string_lossy();

@@ -1,14 +1,14 @@
-# Magic UI Status Texts And Spinners
+# Magik UI Status Texts And Spinners
 
 This repo now supports customizing spinner status text in the TUI via JSON.
 
 The file is loaded from:
 
-- `~/.magic/status_texts.json`
+- `~/.magik/status_texts.json`
 
 ## What it changes
 
-When the top border spinner status would normally show labels like `Thinking`, `Responding`, or `Using tools`, Magic can pick a random phrase from your configured list.
+When the top border spinner status would normally show labels like `Thinking`, `Responding`, or `Using tools`, Magik can pick a random phrase from your configured list.
 
 It picks a new random phrase each time the status updates.
 
@@ -85,4 +85,3 @@ Added built-in spinner options under the `GPT` group:
 - `gptHeartbeat`
 
 You can select any spinner using your existing TUI spinner config.
-

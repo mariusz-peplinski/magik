@@ -2858,7 +2858,8 @@ impl ChatWidget<'_> {
                     if dir
                         .file_name()
                         .map(|name| {
-                            name == std::ffi::OsStr::new(".magic")
+                            name == std::ffi::OsStr::new(".magik")
+                                || name == std::ffi::OsStr::new(".magic")
                                 || name == std::ffi::OsStr::new(".code")
                         })
                         .unwrap_or(false)

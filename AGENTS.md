@@ -46,9 +46,9 @@ When debugging regressions or bugs, write a failing test (or targeted reproducti
 ## Code Home And Themes
 
 - `code_core::config::find_code_home()` resolves in this order: `CODE_HOME`,
-  then `CODEX_HOME`, then default `~/.magic`.
+  then `CODEX_HOME`, then default `~/.magik`.
 - File-backed themes live at `<code_home>/themes` (default
-  `~/.magic/themes`).
+  `~/.magik/themes`).
 - Active theme settings persist to `<code_home>/config.toml` under
   `[tui.theme]`.
 - When no env override is set, read paths can fall back to legacy `~/.codex`

@@ -150,6 +150,7 @@ branches/
 .coder/
 .code/
 .magic/
+.magik/
 
 # local scratch notes
 SUGG.md

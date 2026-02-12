@@ -64,7 +64,7 @@ impl MagicSettingsView {
     fn info_lines(&self) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         lines.push(Line::from(vec![Span::styled(
-            "Magic Settings",
+            "Magik Settings",
             Style::default().add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
@@ -177,4 +177,3 @@ impl MagicSettingsView {
         self.is_complete
     }
 }
-

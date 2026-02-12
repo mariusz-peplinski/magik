@@ -1,24 +1,24 @@
-# Install Local `magic` CLI
+# Install Local `magik` CLI
 
-This repo now builds a local CLI binary named `magic`.
+This repo now builds a local CLI binary named `magik`.
 
 ## Quick install
 
 From the repo root:
 
 ```bash
-./scripts/install-magic-local.sh --build
+./scripts/install-magik-local.sh --build
 ```
 
 That will:
 
 - build with `./build-fast.sh` (if needed)
-- install `magic` to `~/.local/bin/magic`
+- install `magik` to `~/.local/bin/magik`
 
 Verify:
 
 ```bash
-magic --version
+magik --version
 ```
 
 ## Install modes
@@ -26,24 +26,24 @@ magic --version
 Copy mode (default):
 
 ```bash
-./scripts/install-magic-local.sh --build --copy
+./scripts/install-magik-local.sh --build --copy
 ```
 
 Symlink mode (auto-picks up new local repo builds):
 
 ```bash
-./scripts/install-magic-local.sh --build --link
+./scripts/install-magik-local.sh --build --link
 ```
 
 Custom install directory:
 
 ```bash
-./scripts/install-magic-local.sh --build --install-dir "$HOME/bin"
+./scripts/install-magik-local.sh --build --install-dir "$HOME/bin"
 ```
 
 ## PATH setup
 
-If `magic` is not found after install, add your install dir to `PATH`.
+If `magik` is not found after install, add your install dir to `PATH`.
 
 For the default location:
 
@@ -56,6 +56,5 @@ Put that in your shell profile (`~/.bashrc`, `~/.zshrc`, etc.), then open a new 
 ## Updating after pulling changes
 
 ```bash
-./scripts/install-magic-local.sh --build
+./scripts/install-magik-local.sh --build
 ```
-

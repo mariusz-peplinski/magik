@@ -184,8 +184,8 @@ Theme catalog currently includes light, dark, ANSI16, and custom variants:
 - Custom: `custom`
 
 Theme storage notes:
-- Theme files are loaded from `<code_home>/themes` (default `~/.magic/themes`).
-- `code_home` resolution order is `CODE_HOME`, then `CODEX_HOME`, then `~/.magic`.
+- Theme files are loaded from `<code_home>/themes` (default `~/.magik/themes`).
+- `code_home` resolution order is `CODE_HOME`, then `CODEX_HOME`, then `~/.magik`.
 - With no env override, read paths can fall back to legacy `~/.codex` when a default-path file is missing; writes target `<code_home>`.
 
 ### Startup/welcome and motion effects

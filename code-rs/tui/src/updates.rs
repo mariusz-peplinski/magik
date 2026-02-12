@@ -199,9 +199,9 @@ pub fn resolve_upgrade_resolution() -> UpgradeResolution {
                     command: vec![
                         "brew".to_string(),
                         "upgrade".to_string(),
-                        "magic".to_string(),
+                        "magik".to_string(),
                     ],
-                    display: "brew upgrade magic".to_string(),
+                    display: "brew upgrade magik".to_string(),
                 };
             }
         }

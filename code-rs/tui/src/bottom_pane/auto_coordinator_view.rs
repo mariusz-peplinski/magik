@@ -1152,8 +1152,11 @@ impl AutoCoordinatorView {
                 || model.waiting_for_review
                 || model.cli_running)
         {
+            let spinner_interval = Duration::from_millis(
+                spinner::current_spinner().interval_ms.max(50).min(1_000),
+            );
             self.app_event_tx
-                .send(AppEvent::ScheduleFrameIn(Duration::from_secs(1)));
+                .send(AppEvent::ScheduleFrameIn(spinner_interval));
         }
         let display_message = self.resolve_display_message(model);
         let intro = Self::intro_state(frame_style.title_text, model);

@@ -14,7 +14,7 @@ Environment flags:
   DETERMINISTIC=1                     Add -C debuginfo=0; promotes to release-prod unless DETERMINISTIC_FORCE_RELEASE=0
   DETERMINISTIC_FORCE_RELEASE=0|1     Keep dev-fast (0) or switch to release-prod (1, default)
   DETERMINISTIC_NO_UUID=1             macOS only: strip LC_UUID on final executables
-  BUILD_FAST_BINS="magic code-tui"     Override bins to build (space or comma separated)
+  BUILD_FAST_BINS="magik code-tui"     Override bins to build (space or comma separated)
   --workspace codex|code|both         Select workspace to build (default: code)
 
 Examples:
@@ -185,7 +185,7 @@ else
   CALLER_CWD="$(pwd)"
 fi
 
-if [[ "${SCRIPT_DIR}" == */.magic/working/*/branches/* ]]; then
+if [[ "${SCRIPT_DIR}" == */.magik/working/*/branches/* ]]; then
   WORKTREE_PARENT="${SCRIPT_DIR%/branches/*}"
   REPO_NAME="$(basename "${WORKTREE_PARENT}")"
 elif [[ "${SCRIPT_DIR}" == */.code/working/*/branches/* ]]; then
@@ -223,9 +223,9 @@ elif [ -n "${CODEX_HOME:-}" ] && [ -n "${CODEX_HOME}" ]; then
   CACHE_HOME="${CODEX_HOME%/}"
 else
   if [ -d "/mnt/data" ] && [ -w "/mnt/data" ]; then
-    CACHE_HOME="/mnt/data/.magic"
+    CACHE_HOME="/mnt/data/.magik"
   else
-    CACHE_HOME="${REPO_ROOT}/.magic"
+    CACHE_HOME="${REPO_ROOT}/.magik"
   fi
 fi
 case "${CACHE_HOME}" in

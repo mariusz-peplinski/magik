@@ -884,7 +884,7 @@ checksum = "e9b18233253483ce2f65329a24072ec414db782531bdbb7d0bbc4bd2ce6b7e21"
 
 [[package]]
 name = "code-ansi-escape"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "ansi-to-tui",
  "ratatui",
@@ -893,7 +893,7 @@ dependencies = [
 
 [[package]]
 name = "code-app-server"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "code-arg0",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "code-app-server-protocol"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "code-mcp-types",
  "code-protocol",
@@ -922,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "code-apply-patch"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -936,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "code-arg0"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "code-apply-patch",
@@ -949,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "code-auto-drive-core"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "chrono",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "code-auto-drive-diagnostics"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "code-auto-drive-core",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "code-backend-openapi-models"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "serde",
  "serde_json",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "code-browser"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "code-chatgpt"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1053,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "code-cli"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1098,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "code-cloud-tasks"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1126,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "code-cloud-tasks-client"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "code-common"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "clap",
  "code-app-server-protocol",
@@ -1154,7 +1154,7 @@ dependencies = [
 
 [[package]]
 name = "code-core"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -1240,7 +1240,7 @@ dependencies = [
 
 [[package]]
 name = "code-exec"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1271,7 +1271,7 @@ dependencies = [
 
 [[package]]
 name = "code-execpolicy"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "allocative",
  "anyhow",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "code-file-search"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "code-git-apply"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "once_cell",
  "regex",
@@ -1313,7 +1313,7 @@ dependencies = [
 
 [[package]]
 name = "code-git-tooling"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "pretty_assertions",
  "tempfile",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "code-linux-sandbox"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "clap",
  "code-core",
@@ -1336,7 +1336,7 @@ dependencies = [
 
 [[package]]
 name = "code-login"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1358,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "code-mcp-client"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "code-mcp-types",
@@ -1371,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "code-mcp-server"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -1396,7 +1396,7 @@ dependencies = [
 
 [[package]]
 name = "code-mcp-types"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "mcp-types",
  "serde_json",
@@ -1404,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "code-ollama"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "async-stream",
  "bytes",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "code-otel"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "chrono",
  "code-app-server-protocol",
@@ -1440,14 +1440,14 @@ dependencies = [
 
 [[package]]
 name = "code-process-hardening"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "code-protocol"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "code-protocol-ts"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1483,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "code-responses-api-proxy"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "code-rmcp-client"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "axum",
@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "code-tui"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "anyhow",
  "arboard",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "code-utils-json-to-toml"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "pretty_assertions",
  "serde_json",
@@ -1602,7 +1602,7 @@ dependencies = [
 
 [[package]]
 name = "code-utils-readiness"
-version = "0.0.0"
+version = "0.6.12"
 dependencies = [
  "async-trait",
  "thiserror 2.0.17",
@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "code-version"
-version = "0.0.0"
+version = "0.6.12"
 
 [[package]]
 name = "color-eyre"

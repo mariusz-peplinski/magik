@@ -1956,7 +1956,7 @@ impl SettingsOverlayView {
         match section {
             SettingsSection::Model => "Select Model & Reasoning",
             SettingsSection::Theme => "Theme Settings",
-            SettingsSection::Magic => "Magic Settings",
+            SettingsSection::Magic => "Magik Settings",
             SettingsSection::Planning => "Planning Settings",
             SettingsSection::Updates => "Upgrade",
             SettingsSection::Accounts => "Account Switching",

@@ -3,15 +3,15 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Install the local `magic` CLI into a user bin directory.
+Install the local `magik` CLI into a user bin directory.
 
 Usage:
-  ./scripts/install-magic-local.sh [--build] [--copy|--link] [--install-dir DIR]
+  ./scripts/install-magik-local.sh [--build] [--copy|--link] [--install-dir DIR]
 
 Options:
   --build            Force a fresh local build via ./build-fast.sh
   --copy             Copy the binary into install dir (default)
-  --link             Symlink to code-rs/bin/magic for live repo updates
+  --link             Symlink to code-rs/bin/magik for live repo updates
   --install-dir DIR  Install destination (default: $HOME/.local/bin)
   -h, --help         Show this help text
 USAGE
@@ -56,11 +56,11 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-SOURCE_BIN="${REPO_ROOT}/code-rs/bin/magic"
-DEST_BIN="${INSTALL_DIR}/magic"
+SOURCE_BIN="${REPO_ROOT}/code-rs/bin/magik"
+DEST_BIN="${INSTALL_DIR}/magik"
 
 if [[ ${FORCE_BUILD} -eq 1 || ! -x "${SOURCE_BIN}" ]]; then
-  echo "Building magic binary..."
+  echo "Building magik binary..."
   (
     cd "${REPO_ROOT}"
     ./build-fast.sh
@@ -87,13 +87,12 @@ else
   echo "Installed binary copy: ${DEST_BIN}"
 fi
 
-if command -v magic >/dev/null 2>&1; then
-  echo "magic on PATH: $(command -v magic)"
+if command -v magik >/dev/null 2>&1; then
+  echo "magik on PATH: $(command -v magik)"
 else
-  echo "Warning: 'magic' is not currently on PATH."
+  echo "Warning: 'magik' is not currently on PATH."
   echo "Add this to your shell profile if needed:"
   echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
 fi
 
-echo "Done. Try: magic --version"
-
+echo "Done. Try: magik --version"
