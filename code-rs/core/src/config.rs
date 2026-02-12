@@ -86,6 +86,7 @@ pub use sources::{
     set_tui_auto_review_enabled,
     set_tui_rounded_corners,
     set_tui_show_block_type_labels,
+    set_tui_show_explore_details,
     set_tui_show_reasoning,
     set_tui_git_snapshots_enabled,
     set_tui_notifications,

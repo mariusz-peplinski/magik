@@ -1149,6 +1149,88 @@ fn block_type_labels_render_for_user_reasoning_and_response() {
 }
 
 #[test]
+fn reasoning_toggle_is_persistent_for_new_blocks() {
+    let mut harness = ChatWidgetHarness::new();
+
+    // Toggle on before any reasoning blocks exist.
+    harness.toggle_reasoning_visibility();
+    harness.push_reasoning_markdown(
+        "reasoning-persist-1",
+        "This reasoning block should start expanded.",
+    );
+    assert_eq!(
+        Some(false),
+        harness.last_reasoning_is_collapsed(),
+        "expected new reasoning to start expanded",
+    );
+
+    // Toggle off and ensure subsequent blocks start collapsed.
+    harness.toggle_reasoning_visibility();
+    harness.push_reasoning_markdown(
+        "reasoning-persist-2",
+        "This reasoning block should start collapsed.",
+    );
+    assert_eq!(
+        Some(true),
+        harness.last_reasoning_is_collapsed(),
+        "expected new reasoning to start collapsed",
+    );
+}
+
+#[test]
+fn explore_details_toggle_is_separate_from_reasoning() {
+    use code_core::history::state::{
+        ExecAction,
+        ExploreEntry,
+        ExploreEntryStatus,
+        ExploreRecord,
+        ExploreSummary,
+        HistoryId,
+    };
+
+    let mut harness = ChatWidgetHarness::new();
+    harness.set_show_explore_details(false);
+    harness.set_show_reasoning(false);
+
+    let record = ExploreRecord {
+        id: HistoryId::ZERO,
+        entries: (0..7)
+            .map(|idx| ExploreEntry {
+                action: ExecAction::Read,
+                summary: ExploreSummary::Read {
+                    display_path: format!("src/file_{idx}.rs"),
+                    annotation: None,
+                    range: None,
+                },
+                status: ExploreEntryStatus::Success,
+            })
+            .collect(),
+    };
+
+    harness.push_explore_record(record);
+    let compact = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 24));
+    assert!(
+        compact.contains("⋮"),
+        "expected Explore to truncate when details are off; got:\n{compact}"
+    );
+
+    // Ctrl+R should not change Explore detail rendering.
+    harness.toggle_reasoning_visibility();
+    let after_reasoning = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 24));
+    assert!(
+        after_reasoning.contains("⋮"),
+        "expected Explore truncation to be independent of reasoning; got:\n{after_reasoning}"
+    );
+
+    harness.set_show_explore_details(true);
+    let full = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 24));
+    assert!(
+        !full.contains("⋮"),
+        "expected Explore to show full detail when enabled; got:\n{full}"
+    );
+}
+
+#[test]
 fn scroll_spacing_remains_when_scrolled_up() {
     let mut harness = ChatWidgetHarness::new();
 

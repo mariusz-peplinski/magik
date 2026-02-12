@@ -500,6 +500,26 @@ impl App<'_> {
                             }
                         }
                         KeyEvent {
+                            code: KeyCode::Char('e'),
+                            modifiers: crossterm::event::KeyModifiers::CONTROL,
+                            kind: KeyEventKind::Press,
+                            ..
+                        }
+                        | KeyEvent {
+                            code: KeyCode::Char('e'),
+                            modifiers: crossterm::event::KeyModifiers::CONTROL,
+                            kind: KeyEventKind::Repeat,
+                            ..
+                        } => {
+                            // Toggle explore details visibility (Ctrl+E)
+                            match &mut self.app_state {
+                                AppState::Chat { widget } => {
+                                    widget.toggle_explore_details_visibility();
+                                }
+                                AppState::Onboarding { .. } => {}
+                            }
+                        }
+                        KeyEvent {
                             code: KeyCode::Char('m'),
                             kind: KeyEventKind::Press | KeyEventKind::Repeat,
                             ..
@@ -919,6 +939,12 @@ impl App<'_> {
                         widget.set_show_reasoning(enabled);
                     }
                     self.config.tui.show_reasoning = enabled;
+                }
+                AppEvent::SetTuiShowExploreDetails(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_show_explore_details(enabled);
+                    }
+                    self.config.tui.show_explore_details = enabled;
                 }
                 AppEvent::SetTuiShowBlockTypeLabels(enabled) => {
                     if let AppState::Chat { widget } = &mut self.app_state {

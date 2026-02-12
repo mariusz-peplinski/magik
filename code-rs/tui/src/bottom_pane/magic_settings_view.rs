@@ -13,6 +13,7 @@ pub(crate) struct MagicSettingsView {
     app_event_tx: AppEventSender,
     selected_index: usize,
     show_reasoning: bool,
+    show_explore_details: bool,
     show_block_type_labels: bool,
     rounded_corners: bool,
     is_complete: bool,
@@ -22,6 +23,7 @@ impl MagicSettingsView {
     pub(crate) fn new(
         app_event_tx: AppEventSender,
         show_reasoning: bool,
+        show_explore_details: bool,
         show_block_type_labels: bool,
         rounded_corners: bool,
     ) -> Self {
@@ -29,6 +31,7 @@ impl MagicSettingsView {
             app_event_tx,
             selected_index: 0,
             show_reasoning,
+            show_explore_details,
             show_block_type_labels,
             rounded_corners,
             is_complete: false,
@@ -36,7 +39,7 @@ impl MagicSettingsView {
     }
 
     fn option_count() -> usize {
-        4
+        5
     }
 
     fn close(&mut self) {
@@ -47,6 +50,12 @@ impl MagicSettingsView {
         self.show_reasoning = !self.show_reasoning;
         self.app_event_tx
             .send(AppEvent::SetTuiShowReasoning(self.show_reasoning));
+    }
+
+    fn toggle_show_explore_details(&mut self) {
+        self.show_explore_details = !self.show_explore_details;
+        self.app_event_tx
+            .send(AppEvent::SetTuiShowExploreDetails(self.show_explore_details));
     }
 
     fn toggle_show_block_type_labels(&mut self) {
@@ -64,9 +73,10 @@ impl MagicSettingsView {
     fn activate_selected(&mut self) {
         match self.selected_index {
             0 => self.toggle_show_reasoning(),
-            1 => self.toggle_show_block_type_labels(),
-            2 => self.toggle_rounded_corners(),
-            3 => self.close(),
+            1 => self.toggle_show_explore_details(),
+            2 => self.toggle_show_block_type_labels(),
+            3 => self.toggle_rounded_corners(),
+            4 => self.close(),
             _ => {}
         }
     }
@@ -115,8 +125,17 @@ impl MagicSettingsView {
             ),
         ]));
 
+        lines.push(row_toggle(1, "Show explore details", self.show_explore_details));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                "Show full detail for Explore / Ran blocks.",
+                dim,
+            ),
+        ]));
+
         lines.push(row_toggle(
-            1,
+            2,
             "Show block type labels",
             self.show_block_type_labels,
         ));
@@ -128,7 +147,7 @@ impl MagicSettingsView {
             ),
         ]));
 
-        lines.push(row_toggle(2, "Rounded corners", self.rounded_corners));
+        lines.push(row_toggle(3, "Rounded corners", self.rounded_corners));
         lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled(
@@ -139,7 +158,7 @@ impl MagicSettingsView {
 
         lines.push(Line::from(""));
 
-        let close_selected = self.selected_index == 3;
+        let close_selected = self.selected_index == 4;
         let close_style = if close_selected { highlight } else { normal };
         let indicator = if close_selected { ">" } else { " " };
         lines.push(Line::from(vec![

@@ -146,11 +146,6 @@ impl CollapsibleReasoningCell {
             .any(|line| line.spans.iter().any(|span| !span.content.trim().is_empty()))
     }
 
-    pub(crate) fn toggle_collapsed(&self) {
-        let current = self.collapsed.get();
-        self.collapsed.set(!current);
-    }
-
     pub(crate) fn set_collapsed(&self, collapsed: bool) {
         self.collapsed.set(collapsed);
     }

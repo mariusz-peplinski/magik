@@ -11,6 +11,8 @@ use crate::bottom_pane::SettingsSection;
 use crossterm::event::KeyEvent;
 use code_auto_drive_core::AutoRunPhase;
 use code_core::config::{Config, ConfigOverrides, ConfigToml};
+use code_core::history::state::ExploreRecord;
+use code_core::history::state::HistoryDomainRecord;
 use code_core::history::state::HistoryRecord;
 use code_core::history::state::ExecStatus;
 use code_core::protocol::{BackgroundEventEvent, Event, EventMsg, OrderMeta};
@@ -502,6 +504,41 @@ impl ChatWidgetHarness {
         let id = Some(stream_id.into());
         self.chat
             .insert_history_lines_with_kind(StreamKind::Reasoning, id, rendered.lines.drain(..).collect());
+    }
+
+    pub fn push_explore_record(&mut self, record: ExploreRecord) {
+        let key = self.chat.next_internal_key();
+        let cell = history_cell::ExploreAggregationCell::from_record(record.clone());
+        let _ = self.chat.history_insert_with_key_global_tagged(
+            Box::new(cell),
+            key,
+            "explore",
+            Some(HistoryDomainRecord::Explore(record)),
+        );
+    }
+
+    pub fn toggle_reasoning_visibility(&mut self) {
+        self.chat.toggle_reasoning_visibility();
+    }
+
+    pub fn set_show_reasoning(&mut self, enabled: bool) {
+        self.chat.set_show_reasoning(enabled);
+    }
+
+    pub fn set_show_explore_details(&mut self, enabled: bool) {
+        self.chat.set_show_explore_details(enabled);
+    }
+
+    pub fn last_reasoning_is_collapsed(&self) -> Option<bool> {
+        self.chat
+            .history_cells
+            .iter()
+            .rev()
+            .find_map(|cell| {
+                cell.as_any()
+                    .downcast_ref::<history_cell::CollapsibleReasoningCell>()
+                    .map(|rc| rc.is_collapsed())
+            })
     }
 
     pub fn set_show_block_type_labels(&mut self, enabled: bool) {

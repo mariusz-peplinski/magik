@@ -4833,7 +4833,7 @@ impl ChatWidget<'_> {
                         kind = RenderRequestKind::Explore {
                             id: history_id,
                             hold_header,
-                            full_detail: self.is_reasoning_shown(),
+                            full_detail: self.config.tui.show_explore_details,
                         };
                     }
                     HistoryRecord::Diff(_) => {
@@ -16780,6 +16780,7 @@ impl ChatWidget<'_> {
         let view = crate::bottom_pane::MagicSettingsView::new(
             self.app_event_tx.clone(),
             self.config.tui.show_reasoning,
+            self.config.tui.show_explore_details,
             self.config.tui.show_block_type_labels,
             self.config.tui.rounded_corners,
         );
@@ -22090,6 +22091,7 @@ Have we met every part of this goal and is there no further work to do?"#
         lines.push(kv("Ctrl+M", "Switch model"));
         lines.push(kv("Ctrl+N", "Cycle reasoning level"));
         lines.push(kv("Ctrl+R", "Toggle reasoning"));
+        lines.push(kv("Ctrl+E", "Toggle explore details"));
         lines.push(kv("Ctrl+T", "Toggle screen"));
         lines.push(kv("Ctrl+D", "Diff viewer"));
         lines.push(kv("Esc", &format!("{} / close popups", Self::double_esc_hint_label())));
@@ -24401,6 +24403,12 @@ Have we met every part of this goal and is there no further work to do?"#
             "Reasoning: Off"
         };
 
+        let details = if self.config.tui.show_explore_details {
+            "Details: On"
+        } else {
+            "Details: Off"
+        };
+
         let labels = if self.config.tui.show_block_type_labels {
             "Block labels: On"
         } else {
@@ -24413,7 +24421,7 @@ Have we met every part of this goal and is there no further work to do?"#
             "Corners: Sharp"
         };
 
-        Some(format!("{reasoning} · {labels} · {corners}"))
+        Some(format!("{reasoning} · {details} · {labels} · {corners}"))
     }
 
     fn settings_summary_model(&self) -> Option<String> {
@@ -26539,63 +26547,8 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 
     pub(crate) fn toggle_reasoning_visibility(&mut self) {
-        // Track whether any reasoning cells are found and their new state
-        let mut has_reasoning_cells = false;
-        let mut new_collapsed_state = false;
-
-        // Toggle all CollapsibleReasoningCell instances in history
-        for cell in &self.history_cells {
-            // Try to downcast to CollapsibleReasoningCell
-            if let Some(reasoning_cell) = cell
-                .as_any()
-                .downcast_ref::<history_cell::CollapsibleReasoningCell>()
-            {
-                reasoning_cell.toggle_collapsed();
-                has_reasoning_cells = true;
-                new_collapsed_state = reasoning_cell.is_collapsed();
-            }
-        }
-
-        // Update the config to reflect the current state (inverted because collapsed means hidden)
-        if has_reasoning_cells {
-            self.config.tui.show_reasoning = !new_collapsed_state;
-            if let Ok(home) = code_core::config::find_code_home() {
-                if let Err(err) = code_core::config::set_tui_show_reasoning(
-                    &home,
-                    self.config.tui.show_reasoning,
-                ) {
-                    tracing::warn!("Failed to persist reasoning visibility: {err}");
-                }
-            }
-            // Brief status to confirm the toggle to the user
-            let status = if self.config.tui.show_reasoning {
-                "Reasoning shown"
-            } else {
-                "Reasoning hidden"
-            };
-            self.bottom_pane.update_status_text(status.to_string());
-            // Update footer label to reflect current state
-            self.bottom_pane
-                .set_reasoning_state(self.config.tui.show_reasoning);
-        } else {
-            // No reasoning cells exist; inform the user
-            self.bottom_pane
-                .update_status_text("No reasoning to toggle".to_string());
-        }
-        self.refresh_reasoning_collapsed_visibility();
-        // Collapsed state changes affect heights; clear cache
-        self.invalidate_height_cache();
-        self.request_redraw();
-        // In standard terminal mode, re-mirror the transcript so scrollback reflects
-        // the new collapsed/expanded state. We cannot edit prior lines in scrollback,
-        // so append a fresh view.
-        if self.standard_terminal_mode {
-            let mut lines = Vec::new();
-            lines.push(ratatui::text::Line::from(""));
-            lines.extend(self.export_transcript_lines_for_buffer());
-            self.app_event_tx
-                .send(crate::app_event::AppEvent::InsertHistory(lines));
-        }
+        let enabled = !self.config.tui.show_reasoning;
+        self.set_show_reasoning(enabled);
     }
 
     pub(crate) fn set_show_reasoning(&mut self, enabled: bool) {
@@ -26625,6 +26578,37 @@ Have we met every part of this goal and is there no further work to do?"#
         self.bottom_pane.update_status_text(status.to_string());
 
         self.refresh_reasoning_collapsed_visibility();
+        self.invalidate_height_cache();
+        self.request_redraw();
+
+        if self.standard_terminal_mode {
+            let mut lines = Vec::new();
+            lines.push(ratatui::text::Line::from(""));
+            lines.extend(self.export_transcript_lines_for_buffer());
+            self.app_event_tx
+                .send(crate::app_event::AppEvent::InsertHistory(lines));
+        }
+    }
+
+    pub(crate) fn toggle_explore_details_visibility(&mut self) {
+        let enabled = !self.config.tui.show_explore_details;
+        self.set_show_explore_details(enabled);
+    }
+
+    pub(crate) fn set_show_explore_details(&mut self, enabled: bool) {
+        self.config.tui.show_explore_details = enabled;
+        if let Ok(home) = code_core::config::find_code_home() {
+            if let Err(err) = code_core::config::set_tui_show_explore_details(&home, enabled) {
+                tracing::warn!("Failed to persist explore details setting: {err}");
+            }
+        }
+
+        let status = if enabled {
+            "Explore details: On"
+        } else {
+            "Explore details: Off"
+        };
+        self.bottom_pane.update_status_text(status.to_string());
         self.invalidate_height_cache();
         self.request_redraw();
 

@@ -667,6 +667,7 @@ pub(crate) enum AppEvent {
     SetApiKeyFallbackOnAllAccountsLimited(bool),
     SetAccountSwitchingMode(code_core::config_types::AccountSwitchingMode),
     SetTuiShowReasoning(bool),
+    SetTuiShowExploreDetails(bool),
     SetTuiShowBlockTypeLabels(bool),
     SetTuiRoundedCorners(bool),
     RequestAgentInstall { name: String, selected_index: usize },

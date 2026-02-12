@@ -705,6 +705,11 @@ pub struct Tui {
     #[serde(default)]
     pub show_reasoning: bool,
 
+    /// Whether to render Explore / exec aggregation blocks with full detail.
+    /// When disabled, the UI truncates long Explore blocks to keep history compact.
+    #[serde(default)]
+    pub show_explore_details: bool,
+
     /// Whether to display a colored `[BLOCK_TYPE]` label above rendered history blocks.
     #[serde(default)]
     pub show_block_type_labels: bool,
@@ -759,6 +764,7 @@ impl Default for Tui {
             cached_terminal_background: None,
             highlight: HighlightConfig::default(),
             show_reasoning: false,
+            show_explore_details: false,
             show_block_type_labels: false,
             rounded_corners: false,
             stream: StreamConfig::default(),
