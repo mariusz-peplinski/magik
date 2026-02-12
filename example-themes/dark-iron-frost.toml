@@ -1,0 +1,28 @@
+id = "dark-iron-frost"
+name = "Dark - Iron Frost"
+description = "Icy blues on cold graphite"
+is_dark = true
+
+[colors]
+primary = "#7DD3FC"
+secondary = "#A78BFA"
+background = "#0A0F14"
+foreground = "#E8F1FF"
+border = "#2A3440"
+border_focused = "#3A4758"
+selection = "#101A28"
+cursor = "#E8F1FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#93C5FD"
+text = "#DCEBFF"
+text_dim = "#8896A8"
+text_bright = "#FFFFFF"
+keyword = "#A78BFA"
+string = "#9AE6FF"
+comment = "#6B7686"
+function = "#7DD3FC"
+spinner = "#1B2430"
+progress = "#7DD3FC"
+

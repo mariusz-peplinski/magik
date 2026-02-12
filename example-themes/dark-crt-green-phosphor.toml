@@ -1,0 +1,28 @@
+id = "dark-crt-green-phosphor"
+name = "Dark - CRT Green Phosphor"
+description = "Classic green terminal phosphor with modern contrast"
+is_dark = true
+
+[colors]
+primary = "#00FF87"
+secondary = "#22D3EE"
+background = "#020703"
+foreground = "#DFFFEF"
+border = "#16301F"
+border_focused = "#1F4A30"
+selection = "#072012"
+cursor = "#DFFFEF"
+success = "#00FF87"
+warning = "#FBBF24"
+error = "#FF4D6D"
+info = "#22D3EE"
+text = "#CFFFE5"
+text_dim = "#7FA99A"
+text_bright = "#FFFFFF"
+keyword = "#5EEAD4"
+string = "#86EFAC"
+comment = "#5B7A6B"
+function = "#00FF87"
+spinner = "#0E1B14"
+progress = "#00FF87"
+

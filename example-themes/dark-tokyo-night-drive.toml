@@ -1,0 +1,28 @@
+id = "dark-tokyo-night-drive"
+name = "Dark - Tokyo Night Drive"
+description = "Tokyo night-style blues and violets with crisp neon"
+is_dark = true
+
+[colors]
+primary = "#7AA2F7"
+secondary = "#BB9AF7"
+background = "#0B0F1A"
+foreground = "#C0CAF5"
+border = "#2A2F41"
+border_focused = "#3B425C"
+selection = "#151B2E"
+cursor = "#C0CAF5"
+success = "#9ECE6A"
+warning = "#E0AF68"
+error = "#F7768E"
+info = "#7DCFFF"
+text = "#B9C2F3"
+text_dim = "#7A83A6"
+text_bright = "#FFFFFF"
+keyword = "#BB9AF7"
+string = "#9ECE6A"
+comment = "#565F89"
+function = "#7AA2F7"
+spinner = "#1A2138"
+progress = "#7AA2F7"
+

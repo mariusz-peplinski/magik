@@ -1,0 +1,28 @@
+id = "dark-crt-amber-phosphor"
+name = "Dark - CRT Amber Phosphor"
+description = "Retro amber phosphor glow on deep near-black"
+is_dark = true
+
+[colors]
+primary = "#FFB000"
+secondary = "#00E0C6"
+background = "#050604"
+foreground = "#F2E8D5"
+border = "#2A2417"
+border_focused = "#3A321F"
+selection = "#1C160A"
+cursor = "#F2E8D5"
+success = "#7CFFCB"
+warning = "#FFB000"
+error = "#FF5C7A"
+info = "#9AE6FF"
+text = "#E9DCC6"
+text_dim = "#A79E86"
+text_bright = "#FFFFFF"
+keyword = "#FFD27A"
+string = "#FFE3A8"
+comment = "#7A7363"
+function = "#FFB000"
+spinner = "#14100A"
+progress = "#FFB000"
+

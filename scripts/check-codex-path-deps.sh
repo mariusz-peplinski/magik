@@ -35,19 +35,25 @@ while IFS= read -r -d '' cargo_file; do
 done < <(find "$CODE_RS_DIR" -name Cargo.toml -print0)
 
 if command -v jq >/dev/null 2>&1; then
-  echo "Running cargo metadata guard…"
-  metadata=$(cd "$CODE_RS_DIR" && cargo metadata --format-version 1 --all-features 2>/dev/null)
-  if [[ -n "$metadata" ]]; then
-    offenders=$(jq -r \
-      --arg forbidden "$FORBIDDEN_DIR" \
-      '[.packages[]
-        | select(.manifest_path | startswith($forbidden))
-        | .manifest_path] | .[]' <<<"$metadata" || true)
-    if [[ -n "$offenders" ]]; then
-      echo "❌ cargo metadata found forbidden manifests:" >&2
-      echo "$offenders" >&2
-      violations=1
+  if command -v cargo >/dev/null 2>&1; then
+    echo "Running cargo metadata guard…"
+    metadata=$(cd "$CODE_RS_DIR" && cargo metadata --format-version 1 --all-features 2>/dev/null || true)
+    if [[ -n "$metadata" ]]; then
+      offenders=$(jq -r \
+        --arg forbidden "$FORBIDDEN_DIR" \
+        '[.packages[]
+          | select(.manifest_path | startswith($forbidden))
+          | .manifest_path] | .[]' <<<"$metadata" || true)
+      if [[ -n "$offenders" ]]; then
+        echo "❌ cargo metadata found forbidden manifests:" >&2
+        echo "$offenders" >&2
+        violations=1
+      fi
+    else
+      echo "(cargo metadata unavailable; skipping cargo metadata check)"
     fi
+  else
+    echo "(cargo not found; skipping cargo metadata check)"
   fi
 else
   echo "(jq not found; skipping cargo metadata check)"

@@ -1,0 +1,28 @@
+id = "dark-synthwave-ultraviolet"
+name = "Dark - Synthwave Ultraviolet"
+description = "Ultraviolet synthwave with magenta pulse and cyan haze"
+is_dark = true
+
+[colors]
+primary = "#FF2DD6"
+secondary = "#2CF6FF"
+background = "#070414"
+foreground = "#F7F2FF"
+border = "#2E2442"
+border_focused = "#46335F"
+selection = "#1A0F2B"
+cursor = "#F7F2FF"
+success = "#34D399"
+warning = "#FFCC66"
+error = "#FF4A7D"
+info = "#A5B4FC"
+text = "#F1E6FF"
+text_dim = "#A795B8"
+text_bright = "#FFFFFF"
+keyword = "#D8B4FE"
+string = "#F0ABFC"
+comment = "#72627E"
+function = "#2CF6FF"
+spinner = "#1C1225"
+progress = "#FF2DD6"
+

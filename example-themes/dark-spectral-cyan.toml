@@ -1,0 +1,28 @@
+id = "dark-spectral-cyan"
+name = "Dark - Spectral Cyan"
+description = "Spectral cyan glow on midnight graphite"
+is_dark = true
+
+[colors]
+primary = "#22D3EE"
+secondary = "#A78BFA"
+background = "#06090D"
+foreground = "#EAFBFF"
+border = "#22303A"
+border_focused = "#314654"
+selection = "#0E1C23"
+cursor = "#EAFBFF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#7DD3FC"
+text = "#D9FAFF"
+text_dim = "#7EA3AD"
+text_bright = "#FFFFFF"
+keyword = "#A78BFA"
+string = "#5EEAD4"
+comment = "#57707A"
+function = "#22D3EE"
+spinner = "#152129"
+progress = "#22D3EE"
+

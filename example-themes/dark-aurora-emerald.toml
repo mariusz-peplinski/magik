@@ -1,0 +1,28 @@
+id = "dark-aurora-emerald"
+name = "Dark - Aurora Emerald"
+description = "Aurora emerald with violet signal tones"
+is_dark = true
+
+[colors]
+primary = "#10B981"
+secondary = "#A78BFA"
+background = "#050B0B"
+foreground = "#E7FBF7"
+border = "#1F3332"
+border_focused = "#2D4A48"
+selection = "#0E1A1A"
+cursor = "#E7FBF7"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#67E8F9"
+text = "#D3F7EF"
+text_dim = "#7FA9A2"
+text_bright = "#FFFFFF"
+keyword = "#A78BFA"
+string = "#5EEAD4"
+comment = "#5B7A77"
+function = "#34D399"
+spinner = "#142322"
+progress = "#10B981"
+

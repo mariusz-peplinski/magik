@@ -1,0 +1,28 @@
+id = "dark-vanta-sapphire"
+name = "Dark - Vanta Sapphire"
+description = "OLED black with sapphire blue energy"
+is_dark = true
+
+[colors]
+primary = "#38BDF8"
+secondary = "#6366F1"
+background = "#00050A"
+foreground = "#E6F6FF"
+border = "#173043"
+border_focused = "#214A6A"
+selection = "#071B2A"
+cursor = "#E6F6FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#7DD3FC"
+text = "#D7F1FF"
+text_dim = "#7AA0B6"
+text_bright = "#FFFFFF"
+keyword = "#A5B4FC"
+string = "#7DD3FC"
+comment = "#51697A"
+function = "#38BDF8"
+spinner = "#0C1B27"
+progress = "#38BDF8"
+

@@ -1,0 +1,28 @@
+id = "dark-ember-slate"
+name = "Dark - Ember Slate"
+description = "Warm ember accents on smoky slate"
+is_dark = true
+
+[colors]
+primary = "#FFB86C"
+secondary = "#FF4D9A"
+background = "#0B0A0D"
+foreground = "#F5F2F0"
+border = "#2B2A30"
+border_focused = "#403F48"
+selection = "#1B1414"
+cursor = "#F5F2F0"
+success = "#3FB950"
+warning = "#FBBF24"
+error = "#FF5C7A"
+info = "#FDA4AF"
+text = "#EFE7E1"
+text_dim = "#A49C96"
+text_bright = "#FFFFFF"
+keyword = "#FF7AB2"
+string = "#FFD7A1"
+comment = "#7A7373"
+function = "#FFB86C"
+spinner = "#1B1A20"
+progress = "#FFB86C"
+

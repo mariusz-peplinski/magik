@@ -1,0 +1,28 @@
+id = "dark-ink-and-steel"
+name = "Dark - Ink & Steel"
+description = "Low-saturation pro theme with steel-blue accents"
+is_dark = true
+
+[colors]
+primary = "#8AB4F8"
+secondary = "#A3AED2"
+background = "#0E1116"
+foreground = "#E8EDF6"
+border = "#2C323C"
+border_focused = "#3F4756"
+selection = "#141B26"
+cursor = "#E8EDF6"
+success = "#3FB950"
+warning = "#D29922"
+error = "#F85149"
+info = "#79C0FF"
+text = "#DEE6F4"
+text_dim = "#8B95A7"
+text_bright = "#FFFFFF"
+keyword = "#8AB4F8"
+string = "#7DD3FC"
+comment = "#6B7280"
+function = "#93C5FD"
+spinner = "#1D232C"
+progress = "#8AB4F8"
+

@@ -1,0 +1,28 @@
+id = "dark-rose-obsidian"
+name = "Dark - Rose Obsidian"
+description = "Rose neon highlights on obsidian black"
+is_dark = true
+
+[colors]
+primary = "#FF3AAE"
+secondary = "#FF77C8"
+background = "#0A0A0C"
+foreground = "#F7F5F7"
+border = "#25252B"
+border_focused = "#383845"
+selection = "#1B0E16"
+cursor = "#F7F5F7"
+success = "#2EE6A6"
+warning = "#FBBF24"
+error = "#FF5470"
+info = "#FF94D8"
+text = "#F4F1F4"
+text_dim = "#A0A0AA"
+text_bright = "#FFFFFF"
+keyword = "#FF77C8"
+string = "#FFC1E8"
+comment = "#666673"
+function = "#FF3AAE"
+spinner = "#18181F"
+progress = "#FF3AAE"
+

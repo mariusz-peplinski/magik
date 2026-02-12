@@ -1,0 +1,28 @@
+id = "dark-gruvbox-carbon"
+name = "Dark - Gruvbox Carbon"
+description = "Earthy gruvbox-style warmth on charcoal carbon"
+is_dark = true
+
+[colors]
+primary = "#FABD2F"
+secondary = "#83A598"
+background = "#101010"
+foreground = "#EBDBB2"
+border = "#3C3836"
+border_focused = "#504945"
+selection = "#282828"
+cursor = "#EBDBB2"
+success = "#B8BB26"
+warning = "#FABD2F"
+error = "#FB4934"
+info = "#83A598"
+text = "#EBDBB2"
+text_dim = "#A89984"
+text_bright = "#FFFFFF"
+keyword = "#D3869B"
+string = "#B8BB26"
+comment = "#7C6F64"
+function = "#8EC07C"
+spinner = "#1D2021"
+progress = "#FABD2F"
+

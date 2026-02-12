@@ -23,11 +23,14 @@ cd code
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
+# Alternatively:
+#   ./scripts/bootstrap-local.sh
+
 # Build everything (CLI, TUI, MCP servers). This is the same check CI runs.
 ./build-fast.sh
 
 # Launch the TUI with a sample prompt.
-./target/debug/code -- "explain this codebase to me"
+./code-rs/bin/magik -- "explain this codebase to me"
 ```
 
 > [!NOTE]

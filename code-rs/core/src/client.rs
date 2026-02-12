@@ -33,6 +33,7 @@ use tracing::warn;
 use uuid::Uuid;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::Error as WsError;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 const AUTH_REQUIRED_MESSAGE: &str = "Authentication required. Run `code login` to continue.";
@@ -79,8 +80,6 @@ const RESPONSES_BETA_HEADER_V1: &str = "responses=v1";
 const RESPONSES_BETA_HEADER_EXPERIMENTAL: &str = "responses=experimental";
 const RESPONSES_WEBSOCKETS_BETA_HEADER: &str = "responses_websockets=2026-02-04";
 
-const WEB_SEARCH_ELIGIBLE_HEADER: &str = "x-oai-web-search-eligible";
-
 // Sticky-routing token captured at the start of a turn. When present, it must
 // be replayed on every subsequent request within the same turn (retries,
 // continuations, websocket reconnects).
@@ -100,6 +99,16 @@ struct StreamCheckpoint {
 #[derive(Debug, Deserialize)]
 struct ErrorResponse {
     error: Error,
+}
+
+#[derive(Debug, Deserialize)]
+struct WrappedWebsocketErrorEvent {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(alias = "status_code")]
+    status: Option<u16>,
+    #[serde(default)]
+    error: Option<Error>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -450,7 +459,34 @@ impl ModelClient {
             .as_deref()
             .or(prompt.log_tag.as_deref());
         match self.provider.wire_api {
-            WireApi::Responses => self.stream_responses(prompt, log_tag).await,
+            WireApi::Responses => {
+                let prefer_websockets = prompt
+                    .model_family_override
+                    .as_ref()
+                    .map(|family| family.prefer_websockets)
+                    .or_else(|| {
+                        prompt
+                            .model_override
+                            .as_deref()
+                            .and_then(find_family_for_model)
+                            .map(|family| family.prefer_websockets)
+                    })
+                    .unwrap_or(self.config.model_family.prefer_websockets);
+
+                if prefer_websockets {
+                    match self.stream_responses_websocket(prompt, log_tag).await {
+                        Ok(stream) => Ok(stream),
+                        Err(err) => {
+                            warn!(
+                                "preferred websocket transport failed; falling back to responses HTTP stream: {err}"
+                            );
+                            self.stream_responses(prompt, log_tag).await
+                        }
+                    }
+                } else {
+                    self.stream_responses(prompt, log_tag).await
+                }
+            }
             WireApi::ResponsesWebsocket => self.stream_responses_websocket(prompt, log_tag).await,
             WireApi::Chat => {
                 let effective_family = prompt
@@ -661,7 +697,6 @@ impl ModelClient {
 
             req_builder = attach_openai_subagent_header(req_builder);
             req_builder = attach_codex_beta_features_header(req_builder, &self.config);
-            req_builder = attach_web_search_eligible_header(req_builder, &self.config);
             if let Some(state) = turn_state.get() {
                 req_builder = req_builder.header(X_CODEX_TURN_STATE_HEADER, state);
             }
@@ -807,6 +842,13 @@ impl ModelClient {
                             };
                             match next {
                                 Ok(Message::Text(text)) => {
+                                    if let Some(error) = parse_wrapped_websocket_error_event(&text)
+                                        .and_then(map_wrapped_websocket_error_event)
+                                    {
+                                        let _ = tx_bytes.send(Err(error)).await;
+                                        break;
+                                    }
+
                                     let chunk = format!("data: {text}\n\n");
                                     if tx_bytes.send(Ok(Bytes::from(chunk))).await.is_err() {
                                         break;
@@ -861,6 +903,11 @@ impl ModelClient {
                     return Ok(ResponseStream { rx_event });
                 }
                 Err(err) => {
+                    if websocket_connect_is_upgrade_required(&err) {
+                        warn!("responses websocket upgrade required; falling back to HTTP responses transport");
+                        return self.stream_responses(prompt, log_tag).await;
+                    }
+
                     let err = CodexErr::Stream(
                         format!("[ws] failed to connect: {err}"),
                         None,
@@ -1113,7 +1160,6 @@ impl ModelClient {
 
             req_builder = attach_openai_subagent_header(req_builder);
             req_builder = attach_codex_beta_features_header(req_builder, &self.config);
-            req_builder = attach_web_search_eligible_header(req_builder, &self.config);
             if let Some(state) = turn_state.get() {
                 req_builder = req_builder.header(X_CODEX_TURN_STATE_HEADER, state);
             }
@@ -1734,7 +1780,6 @@ impl ModelClient {
 
             request = attach_openai_subagent_header(request);
             request = attach_codex_beta_features_header(request, &self.config);
-            request = attach_web_search_eligible_header(request, &self.config);
 
             if let Some(auth) = auth.as_ref()
                 && auth.mode.is_chatgpt()
@@ -1874,24 +1919,71 @@ fn attach_codex_beta_features_header(
     builder.header("x-codex-beta-features", value)
 }
 
-fn attach_web_search_eligible_header(
-    builder: reqwest::RequestBuilder,
-    config: &Config,
-) -> reqwest::RequestBuilder {
-    let has_header = builder
-        .try_clone()
-        .and_then(|builder| builder.build().ok())
-        .map_or(false, |req| req.headers().contains_key(WEB_SEARCH_ELIGIBLE_HEADER));
-    if has_header {
-        return builder;
+fn parse_wrapped_websocket_error_event(payload: &str) -> Option<WrappedWebsocketErrorEvent> {
+    let event: WrappedWebsocketErrorEvent = serde_json::from_str(payload).ok()?;
+    if event.kind != "error" {
+        return None;
+    }
+    Some(event)
+}
+
+fn map_wrapped_websocket_error_event(event: WrappedWebsocketErrorEvent) -> Option<CodexErr> {
+    let status = StatusCode::from_u16(event.status?).ok()?;
+    if status.is_success() {
+        return None;
     }
 
-    let value = if config.tools_web_search_request {
-        "true"
+    let body = if let Some(error) = event.error {
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            if error.r#type.as_deref() == Some("usage_limit_reached") {
+                return Some(CodexErr::UsageLimitReached(UsageLimitReachedError {
+                    plan_type: error.plan_type,
+                    resets_in_seconds: error.resets_in_seconds,
+                }));
+            }
+
+            if error.r#type.as_deref() == Some("usage_not_included") {
+                return Some(CodexErr::UsageNotIncluded);
+            }
+        }
+
+        if is_quota_exceeded_error(&error) {
+            return Some(CodexErr::QuotaExceeded);
+        }
+
+        serde_json::json!({
+            "error": {
+                "type": error.r#type,
+                "code": error.code,
+                "param": error.param,
+                "message": error.message,
+                "plan_type": error.plan_type,
+                "resets_in_seconds": error.resets_in_seconds,
+            }
+        })
+        .to_string()
     } else {
-        "false"
+        serde_json::json!({
+            "error": {
+                "message": "websocket returned an error event"
+            }
+        })
+        .to_string()
     };
-    builder.header(WEB_SEARCH_ELIGIBLE_HEADER, HeaderValue::from_static(value))
+
+    Some(CodexErr::UnexpectedStatus(UnexpectedResponseError {
+        status,
+        body,
+        request_id: None,
+    }))
+}
+
+fn websocket_connect_is_upgrade_required(error: &WsError) -> bool {
+    matches!(
+        error,
+        WsError::Http(response)
+            if response.status().as_u16() == 426
+    )
 }
 
 fn codex_beta_features_header_value(config: &Config) -> Option<HeaderValue> {
@@ -2489,8 +2581,21 @@ async fn process_sse<S>(
                 }
             }
             "response.created" => {
-                if event.response.is_some() {
-                    let _ = tx_event.send(Ok(ResponseEvent::Created {})).await;
+                if let Some(response) = event.response {
+                    let response_id = response
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string);
+                    let response_model = response
+                        .get("model")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string);
+                    let _ = tx_event
+                        .send(Ok(ResponseEvent::Created {
+                            response_id,
+                            response_model,
+                        }))
+                        .await;
                 }
             }
             "response.failed" => {
@@ -3066,7 +3171,7 @@ mod tests {
         }
 
         fn is_created(ev: &ResponseEvent) -> bool {
-            matches!(ev, ResponseEvent::Created)
+            matches!(ev, ResponseEvent::Created { .. })
         }
         fn is_output(ev: &ResponseEvent) -> bool {
             matches!(ev, ResponseEvent::OutputItemDone { .. })

@@ -1,0 +1,28 @@
+id = "dark-quantum-plum"
+name = "Dark - Quantum Plum"
+description = "Plum neon with crisp cyan interference"
+is_dark = true
+
+[colors]
+primary = "#C026D3"
+secondary = "#22D3EE"
+background = "#0A0611"
+foreground = "#F6EAFE"
+border = "#2F2240"
+border_focused = "#463060"
+selection = "#1A0F2B"
+cursor = "#F6EAFE"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#67E8F9"
+text = "#EED9FF"
+text_dim = "#A18BB6"
+text_bright = "#FFFFFF"
+keyword = "#D8B4FE"
+string = "#F0ABFC"
+comment = "#756184"
+function = "#7DD3FC"
+spinner = "#1C1329"
+progress = "#C026D3"
+

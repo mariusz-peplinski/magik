@@ -148,7 +148,7 @@ qwen --version
 /theme
 
 # Change reasoning level
-/reasoning low|medium|high
+/reasoning minimal|low|medium|high|xhigh
 
 # Switch models or effort presets
 /model
@@ -156,6 +156,15 @@ qwen --version
 # Start new conversation
 /new
 ```
+
+### Keyboard shortcuts
+
+- `Ctrl+M` — switch session model (keeps the current reasoning level when supported; otherwise steps down)
+- `Ctrl+N` — cycle reasoning level for the current model (wraps from max supported back to the lowest)
+- `Ctrl+R` — toggle reasoning visibility
+- `Ctrl+Shift+M` — toggle mouse capture (helps with text selection)
+
+The TUI header shows `Model` and `Reasoning` along with the `Ctrl+M` / `Ctrl+N` hints, and the title reads `Magik Code`.
 
 ## CLI reference
 
@@ -297,17 +306,21 @@ We welcome contributions! Every Code maintains compatibility with upstream while
 
 ### Development workflow
 
+If you haven't installed Rust yet, run `./scripts/bootstrap-local.sh` first.
+
 ```bash
 # Clone and setup
 git clone https://github.com/just-every/code.git
 cd code
+
+# (Optional) install JS tooling used for repo maintenance
 npm install
 
 # Build (use fast build for development)
 ./build-fast.sh
 
 # Run locally
-./code-rs/target/dev-fast/code
+./code-rs/bin/magik
 ```
 
 #### Git hooks
@@ -325,8 +338,7 @@ The `pre-push` hook runs `./pre-release.sh` automatically when pushing to `main`
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
-4. Run tests: `cargo test`
-5. Build successfully: `./build-fast.sh`
+4. Build successfully: `./build-fast.sh`
 6. Submit a pull request
 
 

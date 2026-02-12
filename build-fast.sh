@@ -2,6 +2,16 @@
 # Fast build script for local development - optimized for speed
 set -euo pipefail
 
+# macOS does not ship a C.UTF-8 locale by default. Some toolchains (notably
+# perl) will crash if the environment forces C.UTF-8.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if [[ "${LC_ALL:-}" == "C.UTF-8" || "${LANG:-}" == "C.UTF-8" || "${LC_CTYPE:-}" == "C.UTF-8" || "${LC_CTYPE:-}" == "UTF-8" ]]; then
+    export LC_ALL="en_US.UTF-8"
+    export LANG="en_US.UTF-8"
+    export LC_CTYPE="en_US.UTF-8"
+  fi
+fi
+
 # Usage banner
 usage() {
   cat <<USAGE

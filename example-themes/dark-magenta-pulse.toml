@@ -1,0 +1,28 @@
+id = "dark-magenta-pulse"
+name = "Dark - Magenta Pulse"
+description = "Pulsing magenta on deep violet graphite"
+is_dark = true
+
+[colors]
+primary = "#FF2DD6"
+secondary = "#A855F7"
+background = "#0B0710"
+foreground = "#F8F2FF"
+border = "#2E2437"
+border_focused = "#453352"
+selection = "#201033"
+cursor = "#F8F2FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FF4A7D"
+info = "#D8B4FE"
+text = "#F1E6FF"
+text_dim = "#A795B8"
+text_bright = "#FFFFFF"
+keyword = "#FF2DD6"
+string = "#F0ABFC"
+comment = "#72627E"
+function = "#D8B4FE"
+spinner = "#1C1225"
+progress = "#FF2DD6"
+

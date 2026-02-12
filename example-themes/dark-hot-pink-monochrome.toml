@@ -1,0 +1,28 @@
+id = "dark-hot-pink-monochrome"
+name = "Dark - Hot Pink Monochrome"
+description = "Monochrome grays with hot pink as the only chroma"
+is_dark = true
+
+[colors]
+primary = "#FF2DAA"
+secondary = "#FF70D7"
+background = "#0B0B0E"
+foreground = "#F4F4F6"
+border = "#2B2B2F"
+border_focused = "#40404A"
+selection = "#1A1216"
+cursor = "#F4F4F6"
+success = "#5EEAD4"
+warning = "#FBBF24"
+error = "#FF4D6D"
+info = "#FF93E3"
+text = "#EFEFF2"
+text_dim = "#A1A1AA"
+text_bright = "#FFFFFF"
+keyword = "#FF2DAA"
+string = "#FFB3E8"
+comment = "#6B7280"
+function = "#FF70D7"
+spinner = "#1A1A22"
+progress = "#FF2DAA"
+

@@ -1,0 +1,28 @@
+id = "dark-void-cerulean"
+name = "Dark - Void Cerulean"
+description = "Cold cerulean highlights on deep void gray"
+is_dark = true
+
+[colors]
+primary = "#1D9BF0"
+secondary = "#22D3EE"
+background = "#070A0D"
+foreground = "#E8F1FF"
+border = "#22303A"
+border_focused = "#314654"
+selection = "#0E1C23"
+cursor = "#E8F1FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#60A5FA"
+text = "#DCEBFF"
+text_dim = "#8896A8"
+text_bright = "#FFFFFF"
+keyword = "#22D3EE"
+string = "#7DD3FC"
+comment = "#57707A"
+function = "#1D9BF0"
+spinner = "#152129"
+progress = "#1D9BF0"
+

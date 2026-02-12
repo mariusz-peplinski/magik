@@ -76,9 +76,9 @@ impl App<'_> {
                 .map(|auth| auth.mode)
                 .or_else(|| {
                     if remote_using_chatgpt_hint {
-                        Some(code_protocol::mcp_protocol::AuthMode::ChatGPT)
+                        Some(AuthMode::ChatGPT)
                     } else {
-                        Some(code_protocol::mcp_protocol::AuthMode::ApiKey)
+                        Some(AuthMode::ApiKey)
                     }
                 });
             let presets = code_common::model_presets::builtin_model_presets(auth_mode);
@@ -441,31 +441,6 @@ impl App<'_> {
                             self.dispatch_paste_event(String::new());
                         }
                         KeyEvent {
-                            code: KeyCode::Char('m'),
-                            modifiers: crossterm::event::KeyModifiers::CONTROL,
-                            kind: KeyEventKind::Press,
-                            ..
-                        } => {
-                            // Toggle mouse capture to allow text selection
-                            use crossterm::event::DisableMouseCapture;
-                            use crossterm::event::EnableMouseCapture;
-                            use crossterm::execute;
-                            use std::io::stdout;
-
-                            // Static variable to track mouse capture state
-                            static mut MOUSE_CAPTURE_ENABLED: bool = true;
-
-                            unsafe {
-                                MOUSE_CAPTURE_ENABLED = !MOUSE_CAPTURE_ENABLED;
-                                if MOUSE_CAPTURE_ENABLED {
-                                    let _ = execute!(stdout(), EnableMouseCapture);
-                                } else {
-                                    let _ = execute!(stdout(), DisableMouseCapture);
-                                }
-                            }
-                            self.app_event_tx.send(AppEvent::RequestRedraw);
-                        }
-                        KeyEvent {
                             code: KeyCode::Char('c'),
                             modifiers: crossterm::event::KeyModifiers::CONTROL,
                             kind: KeyEventKind::Press,
@@ -522,6 +497,54 @@ impl App<'_> {
                                     widget.toggle_reasoning_visibility();
                                 }
                                 AppState::Onboarding { .. } => {}
+                            }
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('m'),
+                            kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                            ..
+                        } if key_event
+                            .modifiers
+                            .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            // Ctrl+M: switch model
+                            // Ctrl+Shift+M: toggle mouse capture for text selection
+                            if key_event
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::SHIFT)
+                            {
+                                if key_event.kind == KeyEventKind::Press {
+                                    use crossterm::event::DisableMouseCapture;
+                                    use crossterm::event::EnableMouseCapture;
+                                    use crossterm::execute;
+                                    use std::io::stdout;
+
+                                    // Static variable to track mouse capture state
+                                    static mut MOUSE_CAPTURE_ENABLED: bool = true;
+
+                                    unsafe {
+                                        MOUSE_CAPTURE_ENABLED = !MOUSE_CAPTURE_ENABLED;
+                                        if MOUSE_CAPTURE_ENABLED {
+                                            let _ = execute!(stdout(), EnableMouseCapture);
+                                        } else {
+                                            let _ = execute!(stdout(), DisableMouseCapture);
+                                        }
+                                    }
+                                    self.app_event_tx.send(AppEvent::RequestRedraw);
+                                }
+                            } else if let AppState::Chat { widget } = &mut self.app_state {
+                                widget.cycle_session_model();
+                            }
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('n'),
+                            modifiers: crossterm::event::KeyModifiers::CONTROL,
+                            kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                            ..
+                        } => {
+                            // Cycle session reasoning level (Ctrl+N)
+                            if let AppState::Chat { widget } = &mut self.app_state {
+                                widget.cycle_session_reasoning_level();
                             }
                         }
                         KeyEvent {
