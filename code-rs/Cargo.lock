@@ -1643,7 +1643,7 @@ version = "0.6.13"
 
 [[package]]
 name = "codex-experimental-api-macros"
-version = "0.0.0"
+version = "0.6.13"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1652,7 +1652,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils-absolute-path"
-version = "0.0.0"
+version = "0.6.13"
 dependencies = [
  "dirs",
  "path-absolutize",
@@ -1666,7 +1666,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils-cache"
-version = "0.0.0"
+version = "0.6.13"
 dependencies = [
  "lru",
  "sha1",
@@ -1675,7 +1675,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils-cargo-bin"
-version = "0.0.0"
+version = "0.6.13"
 dependencies = [
  "assert_cmd",
  "runfiles",
@@ -1684,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils-image"
-version = "0.0.0"
+version = "0.6.13"
 dependencies = [
  "base64 0.22.1",
  "codex-utils-cache",
