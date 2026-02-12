@@ -125,6 +125,7 @@ mod agent_install_helpers;
 // Internal vt100-based replay tests live as a separate source file to keep them
 // close to the widget code. Include them in unit tests.
 mod updates;
+mod ui_prefs;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_backend;
 

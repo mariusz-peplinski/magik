@@ -709,6 +709,10 @@ pub struct Tui {
     #[serde(default)]
     pub show_block_type_labels: bool,
 
+    /// Whether to render rounded box corners (╭╮╯╰) instead of sharp corners.
+    #[serde(default)]
+    pub rounded_corners: bool,
+
     /// Streaming/animation behavior for assistant/reasoning output
     #[serde(default)]
     pub stream: StreamConfig,
@@ -756,6 +760,7 @@ impl Default for Tui {
             highlight: HighlightConfig::default(),
             show_reasoning: false,
             show_block_type_labels: false,
+            rounded_corners: false,
             stream: StreamConfig::default(),
             spinner: SpinnerSelection::default(),
             notifications: Notifications::default(),

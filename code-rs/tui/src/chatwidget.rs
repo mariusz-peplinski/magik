@@ -6406,6 +6406,7 @@ impl ChatWidget<'_> {
             config.tui.theme.is_dark,
         );
         config.tui.theme.name = mapped_theme;
+        crate::ui_prefs::set_rounded_corners(config.tui.rounded_corners);
         remember_cwd_history(&config.cwd);
 
         let (code_op_tx, code_op_rx) = unbounded_channel::<Op>();
@@ -13468,7 +13469,7 @@ impl ChatWidget<'_> {
                 self.ensure_spinner_for_activity("assistant-delta");
                 // Show responding state while assistant streams
                 self.bottom_pane
-                    .update_status_text("responding".to_string());
+                    .update_status_text(format!("responding:{id}"));
             }
             EventMsg::AgentReasoning(AgentReasoningEvent { text }) => {
                 // Ignore late reasoning if we've dropped streaming due to interrupt.
@@ -13572,7 +13573,7 @@ impl ChatWidget<'_> {
                 );
                 self.ensure_spinner_for_activity("reasoning-delta");
                 // Show thinking state while reasoning streams
-                self.bottom_pane.update_status_text("thinking".to_string());
+                self.bottom_pane.update_status_text(format!("thinking:{id}"));
             }
             EventMsg::AgentReasoningSectionBreak(AgentReasoningSectionBreakEvent {}) => {
                 // Insert section break in reasoning stream
@@ -16723,6 +16724,7 @@ impl ChatWidget<'_> {
             self.app_event_tx.clone(),
             self.config.tui.show_reasoning,
             self.config.tui.show_block_type_labels,
+            self.config.tui.rounded_corners,
         );
         MagicSettingsContent::new(view)
     }
@@ -24273,7 +24275,13 @@ Have we met every part of this goal and is there no further work to do?"#
             "Block labels: Off"
         };
 
-        Some(format!("{reasoning} · {labels}"))
+        let corners = if self.config.tui.rounded_corners {
+            "Corners: Rounded"
+        } else {
+            "Corners: Sharp"
+        };
+
+        Some(format!("{reasoning} · {labels} · {corners}"))
     }
 
     fn settings_summary_model(&self) -> Option<String> {
@@ -26544,6 +26552,26 @@ Have we met every part of this goal and is there no further work to do?"#
         self.bottom_pane.update_status_text(status.to_string());
         self.history_render.invalidate_all();
         self.mark_render_requests_dirty();
+        self.invalidate_height_cache();
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_rounded_corners(&mut self, enabled: bool) {
+        self.config.tui.rounded_corners = enabled;
+        crate::ui_prefs::set_rounded_corners(enabled);
+
+        if let Ok(home) = code_core::config::find_code_home() {
+            if let Err(err) = code_core::config::set_tui_rounded_corners(&home, enabled) {
+                tracing::warn!("Failed to persist rounded corners setting: {err}");
+            }
+        }
+
+        let status = if enabled {
+            "Rounded corners: On"
+        } else {
+            "Rounded corners: Off"
+        };
+        self.bottom_pane.update_status_text(status.to_string());
         self.invalidate_height_cache();
         self.request_redraw();
     }
@@ -29369,6 +29397,7 @@ Have we met every part of this goal and is there no further work to do?"#
         let status_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(crate::colors::border()))
+            .border_type(crate::ui_prefs::box_border_type())
             .style(Style::default().bg(crate::colors::background()));
         let inner_area = status_block.inner(padded_area);
         let padded_inner = inner_area.inner(Margin::new(1, 0));

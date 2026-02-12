@@ -14,6 +14,7 @@ pub(crate) struct MagicSettingsView {
     selected_index: usize,
     show_reasoning: bool,
     show_block_type_labels: bool,
+    rounded_corners: bool,
     is_complete: bool,
 }
 
@@ -22,18 +23,20 @@ impl MagicSettingsView {
         app_event_tx: AppEventSender,
         show_reasoning: bool,
         show_block_type_labels: bool,
+        rounded_corners: bool,
     ) -> Self {
         Self {
             app_event_tx,
             selected_index: 0,
             show_reasoning,
             show_block_type_labels,
+            rounded_corners,
             is_complete: false,
         }
     }
 
     fn option_count() -> usize {
-        3
+        4
     }
 
     fn close(&mut self) {
@@ -52,11 +55,18 @@ impl MagicSettingsView {
             .send(AppEvent::SetTuiShowBlockTypeLabels(self.show_block_type_labels));
     }
 
+    fn toggle_rounded_corners(&mut self) {
+        self.rounded_corners = !self.rounded_corners;
+        self.app_event_tx
+            .send(AppEvent::SetTuiRoundedCorners(self.rounded_corners));
+    }
+
     fn activate_selected(&mut self) {
         match self.selected_index {
             0 => self.toggle_show_reasoning(),
             1 => self.toggle_show_block_type_labels(),
-            2 => self.close(),
+            2 => self.toggle_rounded_corners(),
+            3 => self.close(),
             _ => {}
         }
     }
@@ -118,9 +128,18 @@ impl MagicSettingsView {
             ),
         ]));
 
+        lines.push(row_toggle(2, "Rounded corners", self.rounded_corners));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                "Render bordered boxes with rounded corners (╭╮╯╰).",
+                dim,
+            ),
+        ]));
+
         lines.push(Line::from(""));
 
-        let close_selected = self.selected_index == 2;
+        let close_selected = self.selected_index == 3;
         let close_style = if close_selected { highlight } else { normal };
         let indicator = if close_selected { ">" } else { " " };
         lines.push(Line::from(vec![

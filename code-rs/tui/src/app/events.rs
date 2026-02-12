@@ -903,6 +903,12 @@ impl App<'_> {
                     }
                     self.config.tui.show_block_type_labels = enabled;
                 }
+                AppEvent::SetTuiRoundedCorners(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_rounded_corners(enabled);
+                    }
+                    self.config.tui.rounded_corners = enabled;
+                }
                 AppEvent::ShowAutoDriveSettings => {
                     if let AppState::Chat { widget } = &mut self.app_state {
                         widget.show_auto_drive_settings();

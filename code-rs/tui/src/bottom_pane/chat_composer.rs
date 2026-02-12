@@ -2,7 +2,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, StatefulWidgetRef, WidgetRef};
+use ratatui::widgets::{Block, Borders, StatefulWidgetRef, WidgetRef};
 use code_core::protocol::TokenUsage;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -19,6 +19,7 @@ use code_protocol::custom_prompts::CustomPrompt;
 use code_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
 
 use crate::app_event_sender::AppEventSender;
+use crate::app_event::AppEvent;
 use crate::auto_drive_style::{BorderGradient, ComposerStyle};
 use crate::chatwidget::AutoReviewIndicatorStatus;
 use crate::bottom_pane::textarea::TextArea;
@@ -183,6 +184,7 @@ pub(crate) struct ChatComposer {
     auto_drive_active: bool,
     auto_drive_style: Option<ComposerStyle>,
     status_text_overrides: Option<StatusTextOverrides>,
+    last_status_technical: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -375,6 +377,7 @@ impl ChatComposer {
             auto_drive_active: false,
             auto_drive_style: None,
             status_text_overrides,
+            last_status_technical: None,
         }
     }
 
@@ -420,10 +423,28 @@ impl ChatComposer {
 
     pub fn set_task_running(&mut self, running: bool) {
         self.is_task_running = running;
+        if !running {
+            self.last_status_technical = None;
+        }
     }
 
     pub fn update_status_message(&mut self, message: String) {
-        let (category, fallback) = Self::classify_status_message(&message);
+        let trimmed = message.trim();
+        if self
+            .last_status_technical
+            .as_deref()
+            .is_some_and(|prev| prev == trimmed)
+        {
+            return;
+        }
+
+        self.last_status_technical = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        };
+
+        let (category, fallback) = Self::classify_status_message(trimmed);
         self.status_message = self
             .status_text_overrides
             .as_ref()
@@ -2909,7 +2930,7 @@ impl WidgetRef for ChatComposer {
         } else {
             input_block = input_block
                 .border_style(Style::default().fg(crate::colors::border()))
-                .border_type(BorderType::Plain)
+                .border_type(crate::ui_prefs::box_border_type())
                 .style(Style::default().bg(crate::colors::background()));
         }
 

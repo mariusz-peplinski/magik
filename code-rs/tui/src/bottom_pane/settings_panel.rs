@@ -73,6 +73,7 @@ where
     let mut block = Block::default()
         .borders(Borders::ALL)
         .border_style(style.border_style)
+        .border_type(crate::ui_prefs::box_border_type())
         .style(style.background_style)
         .title_alignment(style.title_alignment);
 

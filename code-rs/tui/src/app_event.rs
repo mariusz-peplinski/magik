@@ -668,6 +668,7 @@ pub(crate) enum AppEvent {
     SetAccountSwitchingMode(code_core::config_types::AccountSwitchingMode),
     SetTuiShowReasoning(bool),
     SetTuiShowBlockTypeLabels(bool),
+    SetTuiRoundedCorners(bool),
     RequestAgentInstall { name: String, selected_index: usize },
     AgentsOverviewSelectionChanged { index: usize },
     /// Add or update an agent's settings (enabled, params, instructions)
