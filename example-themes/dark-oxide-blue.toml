@@ -1,0 +1,28 @@
+id = "dark-oxide-blue"
+name = "Dark - Oxide Blue"
+description = "Clean azure with oxide rose edges"
+is_dark = true
+
+[colors]
+primary = "#60A5FA"
+secondary = "#FB7185"
+background = "#0A0C10"
+foreground = "#EEF4FF"
+border = "#243245"
+border_focused = "#354A6B"
+selection = "#111B2E"
+cursor = "#EEF4FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#93C5FD"
+text = "#DDE9FF"
+text_dim = "#8798B5"
+text_bright = "#FFFFFF"
+keyword = "#93C5FD"
+string = "#FCA5A5"
+comment = "#5D6B86"
+function = "#60A5FA"
+spinner = "#182235"
+progress = "#60A5FA"
+

@@ -1,0 +1,28 @@
+id = "dark-verdant-arch"
+name = "Dark - Verdant Arch"
+description = "Emerald greens with clean cyan contrast"
+is_dark = true
+
+[colors]
+primary = "#34D399"
+secondary = "#22D3EE"
+background = "#06110C"
+foreground = "#EAFBF5"
+border = "#21342C"
+border_focused = "#2F4A3D"
+selection = "#0D2018"
+cursor = "#EAFBF5"
+success = "#2EE6A6"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#67E8F9"
+text = "#D8F7EA"
+text_dim = "#7EA699"
+text_bright = "#FFFFFF"
+keyword = "#22D3EE"
+string = "#86EFAC"
+comment = "#5C7C70"
+function = "#34D399"
+spinner = "#172823"
+progress = "#34D399"
+

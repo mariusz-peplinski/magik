@@ -1,0 +1,28 @@
+id = "dark-obsidian-cyanotype"
+name = "Dark - Obsidian Cyanotype"
+description = "Inky obsidian blues with cyanotype highlights"
+is_dark = true
+
+[colors]
+primary = "#06B6D4"
+secondary = "#60A5FA"
+background = "#05070B"
+foreground = "#E7F6FF"
+border = "#1E2A3A"
+border_focused = "#2C3F59"
+selection = "#0B1A2A"
+cursor = "#E7F6FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#60A5FA"
+text = "#D8F1FF"
+text_dim = "#7AA0B6"
+text_bright = "#FFFFFF"
+keyword = "#93C5FD"
+string = "#67E8F9"
+comment = "#51697A"
+function = "#06B6D4"
+spinner = "#0C1B27"
+progress = "#06B6D4"
+

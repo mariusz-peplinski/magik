@@ -1,0 +1,28 @@
+id = "dark-nocturne-gold"
+name = "Dark - Nocturne Gold"
+description = "Gold accents on quiet charcoal"
+is_dark = true
+
+[colors]
+primary = "#FBBF24"
+secondary = "#60A5FA"
+background = "#0D0D0B"
+foreground = "#F6F3E9"
+border = "#2F2D24"
+border_focused = "#454234"
+selection = "#19160A"
+cursor = "#F6F3E9"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#93C5FD"
+text = "#EFE7D1"
+text_dim = "#A79E86"
+text_bright = "#FFFFFF"
+keyword = "#F59E0B"
+string = "#FDE68A"
+comment = "#7A7363"
+function = "#60A5FA"
+spinner = "#1D1A12"
+progress = "#FBBF24"
+

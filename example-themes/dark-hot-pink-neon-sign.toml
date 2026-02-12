@@ -1,0 +1,28 @@
+id = "dark-hot-pink-neon-sign"
+name = "Dark - Hot Pink Neon Sign"
+description = "Neon-sign hot pink with deep graphite and clean whites"
+is_dark = true
+
+[colors]
+primary = "#FF3EBF"
+secondary = "#FF86DD"
+background = "#0A0A0F"
+foreground = "#F7F6FA"
+border = "#242430"
+border_focused = "#363648"
+selection = "#1A0E18"
+cursor = "#F7F6FA"
+success = "#2EE6A6"
+warning = "#FFC857"
+error = "#FF5470"
+info = "#FF94D8"
+text = "#F3F2F7"
+text_dim = "#9CA3AF"
+text_bright = "#FFFFFF"
+keyword = "#FF86DD"
+string = "#FFC1E8"
+comment = "#666673"
+function = "#FF3EBF"
+spinner = "#18181F"
+progress = "#FF3EBF"
+

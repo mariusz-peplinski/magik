@@ -1,0 +1,28 @@
+id = "dark-graphite-ink"
+name = "Dark - Graphite Ink"
+description = "Neutral graphite with refined sky-blue ink"
+is_dark = true
+
+[colors]
+primary = "#8AB4F8"
+secondary = "#A3AED2"
+background = "#0B0D10"
+foreground = "#E8EDF6"
+border = "#30343B"
+border_focused = "#454B57"
+selection = "#121722"
+cursor = "#E8EDF6"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#93C5FD"
+text = "#DEE6F4"
+text_dim = "#8B95A7"
+text_bright = "#FFFFFF"
+keyword = "#8AB4F8"
+string = "#7DD3FC"
+comment = "#6B7280"
+function = "#93C5FD"
+spinner = "#1D232C"
+progress = "#8AB4F8"
+

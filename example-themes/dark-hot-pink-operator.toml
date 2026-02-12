@@ -1,0 +1,28 @@
+id = "dark-hot-pink-operator"
+name = "Dark - Hot Pink Operator"
+description = "Operator-focused grayscale with hot pink emphasis"
+is_dark = true
+
+[colors]
+primary = "#FF1FB8"
+secondary = "#FF77C8"
+background = "#0D0D10"
+foreground = "#F5F5F7"
+border = "#2A2A2F"
+border_focused = "#3D3D46"
+selection = "#1C121A"
+cursor = "#F5F5F7"
+success = "#34D399"
+warning = "#F7C948"
+error = "#FF4A7D"
+info = "#FF7AE6"
+text = "#F1F1F3"
+text_dim = "#A6A6B3"
+text_bright = "#FFFFFF"
+keyword = "#FF1FB8"
+string = "#FFA6F0"
+comment = "#6C6C78"
+function = "#FF77C8"
+spinner = "#1B1B22"
+progress = "#FF1FB8"
+

@@ -1,0 +1,28 @@
+id = "dark-nordic-aurora"
+name = "Dark - Nordic Aurora"
+description = "Nordic cool grays with aurora teal highlights"
+is_dark = true
+
+[colors]
+primary = "#88C0D0"
+secondary = "#B48EAD"
+background = "#0B1118"
+foreground = "#E5E9F0"
+border = "#2B3442"
+border_focused = "#3B465A"
+selection = "#13202F"
+cursor = "#E5E9F0"
+success = "#A3BE8C"
+warning = "#EBCB8B"
+error = "#BF616A"
+info = "#81A1C1"
+text = "#D8DEE9"
+text_dim = "#8793A5"
+text_bright = "#FFFFFF"
+keyword = "#B48EAD"
+string = "#8FBCBB"
+comment = "#6B7686"
+function = "#88C0D0"
+spinner = "#1A2534"
+progress = "#88C0D0"
+

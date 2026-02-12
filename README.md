@@ -148,7 +148,7 @@ qwen --version
 /theme
 
 # Change reasoning level
-/reasoning low|medium|high
+/reasoning minimal|low|medium|high|xhigh
 
 # Switch models or effort presets
 /model
@@ -156,6 +156,15 @@ qwen --version
 # Start new conversation
 /new
 ```
+
+### Keyboard shortcuts
+
+- `Ctrl+M` — switch session model (keeps the current reasoning level when supported; otherwise steps down)
+- `Ctrl+N` — cycle reasoning level for the current model (wraps from max supported back to the lowest)
+- `Ctrl+R` — toggle reasoning visibility
+- `Ctrl+Shift+M` — toggle mouse capture (helps with text selection)
+
+The TUI header shows `Model` and `Reasoning` along with the `Ctrl+M` / `Ctrl+N` hints, and the title reads `Magik Code`.
 
 ## CLI reference
 

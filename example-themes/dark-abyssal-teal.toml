@@ -1,0 +1,28 @@
+id = "dark-abyssal-teal"
+name = "Dark - Abyssal Teal"
+description = "Deep ocean teal with violet highlights"
+is_dark = true
+
+[colors]
+primary = "#26E6D1"
+secondary = "#8B5CF6"
+background = "#060B10"
+foreground = "#E6F7FF"
+border = "#22303A"
+border_focused = "#2D4254"
+selection = "#0E1B24"
+cursor = "#E6F7FF"
+success = "#2EE6A6"
+warning = "#FFCC66"
+error = "#FF5C7A"
+info = "#6AD5FF"
+text = "#DAF2F7"
+text_dim = "#7FA0A8"
+text_bright = "#FFFFFF"
+keyword = "#BDA3FF"
+string = "#7CFFCB"
+comment = "#58717C"
+function = "#5EEAD4"
+spinner = "#16222B"
+progress = "#26E6D1"
+

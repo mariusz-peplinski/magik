@@ -1,0 +1,28 @@
+id = "dark-fuchsia-operator"
+name = "Dark - Fuchsia Operator"
+description = "Operator-grade fuchsia with clean magenta depth"
+is_dark = true
+
+[colors]
+primary = "#FF1FB8"
+secondary = "#C026D3"
+background = "#0D0D12"
+foreground = "#F5F2FF"
+border = "#2B2B35"
+border_focused = "#404050"
+selection = "#1C1223"
+cursor = "#F5F2FF"
+success = "#3BE58D"
+warning = "#FFCC66"
+error = "#FF4A7D"
+info = "#FF7AE6"
+text = "#F2EDFF"
+text_dim = "#A6A0B8"
+text_bright = "#FFFFFF"
+keyword = "#C026D3"
+string = "#FFA6F0"
+comment = "#6C667E"
+function = "#FF1FB8"
+spinner = "#1B1B25"
+progress = "#FF1FB8"
+

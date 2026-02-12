@@ -1,0 +1,28 @@
+id = "dark-sage-terminal"
+name = "Dark - Sage Terminal"
+description = "Muted sage greens with warm amber cues"
+is_dark = true
+
+[colors]
+primary = "#7EE0B0"
+secondary = "#FBBF24"
+background = "#07110D"
+foreground = "#EAF9F2"
+border = "#24322C"
+border_focused = "#344A40"
+selection = "#0F2119"
+cursor = "#EAF9F2"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#67E8F9"
+text = "#D7F3E6"
+text_dim = "#88A89A"
+text_bright = "#FFFFFF"
+keyword = "#A7F3D0"
+string = "#FDE68A"
+comment = "#60756B"
+function = "#7EE0B0"
+spinner = "#18251F"
+progress = "#7EE0B0"
+

@@ -22086,6 +22086,8 @@ Have we met every part of this goal and is there no further work to do?"#
         // Global
         lines.push(kv("F1", "Help overlay"));
         lines.push(kv("Ctrl+G", "Open external editor"));
+        lines.push(kv("Ctrl+M", "Switch model"));
+        lines.push(kv("Ctrl+N", "Cycle reasoning level"));
         lines.push(kv("Ctrl+R", "Toggle reasoning"));
         lines.push(kv("Ctrl+T", "Toggle screen"));
         lines.push(kv("Ctrl+D", "Diff viewer"));
@@ -22336,6 +22338,134 @@ Have we met every part of this goal and is there no further work to do?"#
             false,
             ModelSelectionTarget::Session,
         );
+    }
+
+    pub(crate) fn cycle_session_model(&mut self) {
+        if self.is_task_running() {
+            self.bottom_pane
+                .flash_footer_notice("Model switching is disabled while a task is in progress.".to_string());
+            return;
+        }
+
+        let presets = self.available_model_presets();
+        if presets.is_empty() {
+            self.bottom_pane.flash_footer_notice(
+                "No model presets are available. Update your configuration to define models.".to_string(),
+            );
+            return;
+        }
+
+        let current_model = self.config.model.clone();
+        let current_index = presets.iter().position(|preset| {
+            preset.model.eq_ignore_ascii_case(&current_model)
+                || preset.id.eq_ignore_ascii_case(&current_model)
+                || preset.display_name.eq_ignore_ascii_case(&current_model)
+        });
+        let next_index = current_index
+            .map(|idx| idx.saturating_add(1) % presets.len())
+            .unwrap_or(0);
+        let next_model = presets[next_index].model.clone();
+
+        let next_effort = Self::clamp_reasoning_down_for_model_from_presets(
+            &next_model,
+            self.config.model_reasoning_effort,
+            &presets,
+        );
+
+        self.apply_model_selection(next_model, Some(next_effort));
+    }
+
+    pub(crate) fn cycle_session_reasoning_level(&mut self) {
+        let presets = self.available_model_presets();
+        let supported = Self::supported_reasoning_efforts_for_model_from_presets(
+            &self.config.model,
+            &presets,
+        )
+        .unwrap_or_else(|| {
+            vec![
+                ReasoningEffort::Minimal,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+            ]
+        });
+        if supported.is_empty() {
+            return;
+        }
+
+        let current = self.config.model_reasoning_effort;
+        let current_index = supported.iter().position(|effort| *effort == current);
+        let next_index = current_index
+            .map(|idx| idx.saturating_add(1) % supported.len())
+            .unwrap_or(0);
+
+        let next = supported[next_index];
+        self.set_reasoning_effort(next);
+    }
+
+    fn supported_reasoning_efforts_for_model_from_presets(
+        model: &str,
+        presets: &[ModelPreset],
+    ) -> Option<Vec<ReasoningEffort>> {
+        fn rank(effort: ReasoningEffort) -> u8 {
+            match effort {
+                ReasoningEffort::Minimal | ReasoningEffort::None => 0,
+                ReasoningEffort::Low => 1,
+                ReasoningEffort::Medium => 2,
+                ReasoningEffort::High => 3,
+                ReasoningEffort::XHigh => 4,
+            }
+        }
+
+        let model_lower = model.to_ascii_lowercase();
+        let preset = presets.iter().find(|preset| {
+            preset.model.eq_ignore_ascii_case(&model_lower)
+                || preset.id.eq_ignore_ascii_case(&model_lower)
+                || preset.display_name.eq_ignore_ascii_case(&model_lower)
+        })?;
+
+        let mut supported: Vec<ReasoningEffort> = preset
+            .supported_reasoning_efforts
+            .iter()
+            .map(|opt| ReasoningEffort::from(opt.effort))
+            .collect();
+        supported.sort_by_key(|effort| rank(*effort));
+        supported.dedup();
+        Some(supported)
+    }
+
+    fn clamp_reasoning_down_for_model_from_presets(
+        model: &str,
+        requested: ReasoningEffort,
+        presets: &[ModelPreset],
+    ) -> ReasoningEffort {
+        fn rank(effort: ReasoningEffort) -> u8 {
+            match effort {
+                ReasoningEffort::Minimal | ReasoningEffort::None => 0,
+                ReasoningEffort::Low => 1,
+                ReasoningEffort::Medium => 2,
+                ReasoningEffort::High => 3,
+                ReasoningEffort::XHigh => 4,
+            }
+        }
+
+        let Some(supported) = Self::supported_reasoning_efforts_for_model_from_presets(model, presets)
+        else {
+            return Self::clamp_reasoning_for_model(model, requested);
+        };
+        if supported.iter().any(|effort| *effort == requested) {
+            return requested;
+        }
+
+        let requested_rank = rank(requested);
+        supported
+            .iter()
+            .copied()
+            .filter(|effort| rank(*effort) < requested_rank)
+            .max_by_key(|effort| rank(*effort))
+            .or_else(|| supported.first().copied())
+            .unwrap_or(requested)
     }
 
     pub(crate) fn show_review_model_selector(&mut self) {
@@ -29301,7 +29431,7 @@ Have we met every part of this goal and is there no further work to do?"#
             let mut spans: Vec<Span> = Vec::new();
             // Title follows theme text color
             spans.push(Span::styled(
-                "Every Code",
+                "Magik Code",
                 Style::default()
                     .fg(crate::colors::text())
                     .add_modifier(Modifier::BOLD),
@@ -29320,6 +29450,10 @@ Have we met every part of this goal and is there no further work to do?"#
                     self.format_model_name(&self.config.model),
                     Style::default().fg(crate::colors::info()),
                 ));
+                spans.push(Span::styled(
+                    " (Ctrl+M)",
+                    Style::default().fg(crate::colors::text_dim()),
+                ));
             }
 
             if include_reasoning {
@@ -29334,6 +29468,10 @@ Have we met every part of this goal and is there no further work to do?"#
                 spans.push(Span::styled(
                     Self::format_reasoning_effort(self.config.model_reasoning_effort),
                     Style::default().fg(crate::colors::info()),
+                ));
+                spans.push(Span::styled(
+                    " (Ctrl+N)",
+                    Style::default().fg(crate::colors::text_dim()),
                 ));
             }
 

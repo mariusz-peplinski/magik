@@ -1,0 +1,28 @@
+id = "dark-pink-noir"
+name = "Dark - Pink Noir"
+description = "Hot pink neon on deep charcoal noir"
+is_dark = true
+
+[colors]
+primary = "#FF2DAA"
+secondary = "#FF70D7"
+background = "#0B0B10"
+foreground = "#F4F4F6"
+border = "#2A2A33"
+border_focused = "#3D3D4A"
+selection = "#20111A"
+cursor = "#F4F4F6"
+success = "#34D399"
+warning = "#F7C948"
+error = "#FF4D6D"
+info = "#FF93E3"
+text = "#F0F0F2"
+text_dim = "#A1A1B0"
+text_bright = "#FFFFFF"
+keyword = "#FF2DAA"
+string = "#FFB3E8"
+comment = "#6F6F7D"
+function = "#FF70D7"
+spinner = "#1A1A22"
+progress = "#FF2DAA"
+

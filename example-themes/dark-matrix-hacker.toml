@@ -1,0 +1,28 @@
+id = "dark-matrix-hacker"
+name = "Dark - Matrix Hacker"
+description = "Electric green hacking aesthetic with clean readability"
+is_dark = true
+
+[colors]
+primary = "#00FF66"
+secondary = "#00D4FF"
+background = "#020402"
+foreground = "#E6FFEF"
+border = "#15351F"
+border_focused = "#1F5530"
+selection = "#062012"
+cursor = "#E6FFEF"
+success = "#00FF66"
+warning = "#FBBF24"
+error = "#FF4D6D"
+info = "#22D3EE"
+text = "#D5FFE4"
+text_dim = "#7FA99A"
+text_bright = "#FFFFFF"
+keyword = "#00D4FF"
+string = "#86EFAC"
+comment = "#5B7A6B"
+function = "#00FF66"
+spinner = "#0B1A12"
+progress = "#00FF66"
+

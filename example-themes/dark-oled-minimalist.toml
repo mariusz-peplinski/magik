@@ -1,0 +1,28 @@
+id = "dark-oled-minimalist"
+name = "Dark - OLED Minimalist"
+description = "Pure OLED black with restrained cyan focus"
+is_dark = true
+
+[colors]
+primary = "#38BDF8"
+secondary = "#A78BFA"
+background = "#000000"
+foreground = "#EAF2FF"
+border = "#1A1A1A"
+border_focused = "#2B2B2B"
+selection = "#0B1220"
+cursor = "#EAF2FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#7DD3FC"
+text = "#E2E8F0"
+text_dim = "#94A3B8"
+text_bright = "#FFFFFF"
+keyword = "#A78BFA"
+string = "#5EEAD4"
+comment = "#6B7280"
+function = "#38BDF8"
+spinner = "#0F172A"
+progress = "#38BDF8"
+

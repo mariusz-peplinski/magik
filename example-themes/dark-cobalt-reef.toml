@@ -1,0 +1,28 @@
+id = "dark-cobalt-reef"
+name = "Dark - Cobalt Reef"
+description = "Cobalt blues and bright reef cyan"
+is_dark = true
+
+[colors]
+primary = "#3B82F6"
+secondary = "#22D3EE"
+background = "#070B14"
+foreground = "#E6F0FF"
+border = "#22304A"
+border_focused = "#31456B"
+selection = "#0E1A33"
+cursor = "#E6F0FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#60A5FA"
+text = "#D9E8FF"
+text_dim = "#7F93B3"
+text_bright = "#FFFFFF"
+keyword = "#93C5FD"
+string = "#67E8F9"
+comment = "#5D6F90"
+function = "#60A5FA"
+spinner = "#18243D"
+progress = "#3B82F6"
+

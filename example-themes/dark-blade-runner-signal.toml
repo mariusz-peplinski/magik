@@ -1,0 +1,28 @@
+id = "dark-blade-runner-signal"
+name = "Dark - Blade Runner Signal"
+description = "Neon orange and cyan signal on rainy noir"
+is_dark = true
+
+[colors]
+primary = "#FF7A18"
+secondary = "#00E5FF"
+background = "#07070A"
+foreground = "#EDEFF7"
+border = "#2A2A35"
+border_focused = "#3F3F52"
+selection = "#14152A"
+cursor = "#EDEFF7"
+success = "#2EE6A6"
+warning = "#FFC857"
+error = "#FF4D6D"
+info = "#76D6FF"
+text = "#E6E8F2"
+text_dim = "#9AA3B2"
+text_bright = "#FFFFFF"
+keyword = "#00E5FF"
+string = "#FFD7A1"
+comment = "#6B7280"
+function = "#FF7A18"
+spinner = "#1A1B2B"
+progress = "#FF7A18"
+

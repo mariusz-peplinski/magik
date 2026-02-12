@@ -1,0 +1,28 @@
+id = "dark-desert-mirage"
+name = "Dark - Desert Mirage"
+description = "Desert warmth with mirage teal on deep sand-black"
+is_dark = true
+
+[colors]
+primary = "#F59E0B"
+secondary = "#2DD4BF"
+background = "#0D0B08"
+foreground = "#F6EBDD"
+border = "#3A3126"
+border_focused = "#514434"
+selection = "#1B140C"
+cursor = "#F6EBDD"
+success = "#34D399"
+warning = "#F59E0B"
+error = "#FB7185"
+info = "#60A5FA"
+text = "#EFE0CC"
+text_dim = "#A79E86"
+text_bright = "#FFFFFF"
+keyword = "#2DD4BF"
+string = "#FDE68A"
+comment = "#7A7363"
+function = "#F59E0B"
+spinner = "#1D160E"
+progress = "#F59E0B"
+

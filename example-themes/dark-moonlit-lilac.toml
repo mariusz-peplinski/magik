@@ -1,0 +1,28 @@
+id = "dark-moonlit-lilac"
+name = "Dark - Moonlit Lilac"
+description = "Soft lilac glow with mint clarity"
+is_dark = true
+
+[colors]
+primary = "#C4B5FD"
+secondary = "#5EEAD4"
+background = "#0B0A14"
+foreground = "#F3F0FF"
+border = "#2B2A3D"
+border_focused = "#403F5C"
+selection = "#17142A"
+cursor = "#F3F0FF"
+success = "#34D399"
+warning = "#FBBF24"
+error = "#FB7185"
+info = "#93C5FD"
+text = "#EAE5FF"
+text_dim = "#A39DB8"
+text_bright = "#FFFFFF"
+keyword = "#E879F9"
+string = "#5EEAD4"
+comment = "#726D8A"
+function = "#C4B5FD"
+spinner = "#1B1931"
+progress = "#C4B5FD"
+
