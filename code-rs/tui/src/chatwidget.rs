@@ -1136,6 +1136,16 @@ struct DebouncedSessionModelSelection {
     announce: bool,
 }
 
+#[derive(Debug, Clone)]
+struct SessionModelPreviewOriginal {
+    model: String,
+    model_family: code_core::model_family::ModelFamily,
+    model_reasoning_effort: ReasoningEffort,
+    preferred_model_reasoning_effort: Option<ReasoningEffort>,
+    model_explicit: bool,
+    chat_model_selected_explicitly: bool,
+}
+
 impl RateLimitWarningState {
     fn take_warnings(
         &mut self,
@@ -1544,6 +1554,8 @@ pub(crate) struct ChatWidget<'a> {
     allow_remote_default_at_startup: bool,
     /// Tracks whether the user explicitly selected a chat model in this session.
     chat_model_selected_explicitly: bool,
+
+    session_model_preview_original: Option<SessionModelPreviewOriginal>,
 
     debounced_session_model_selection: Option<DebouncedSessionModelSelection>,
     debounced_session_model_selection_token: u64,
@@ -6482,6 +6494,7 @@ impl ChatWidget<'_> {
             remote_model_presets: None,
             allow_remote_default_at_startup: !config.model_explicit,
             chat_model_selected_explicitly: false,
+            session_model_preview_original: None,
             debounced_session_model_selection: None,
             debounced_session_model_selection_token: 0,
             planning_restore: None,
@@ -6861,6 +6874,7 @@ impl ChatWidget<'_> {
             remote_model_presets: None,
             allow_remote_default_at_startup: !config.model_explicit,
             chat_model_selected_explicitly: false,
+            session_model_preview_original: None,
             debounced_session_model_selection: None,
             debounced_session_model_selection_token: 0,
             planning_restore: None,
@@ -16110,9 +16124,6 @@ impl ChatWidget<'_> {
                 continue;
             }
 
-            let reset_at = snapshot_map
-                .get(&account.id)
-                .and_then(|record| record.secondary_next_reset_at);
             let plan = account
                 .tokens
                 .as_ref()
@@ -16122,7 +16133,7 @@ impl ChatWidget<'_> {
                 &code_home,
                 &account.id,
                 plan.as_deref(),
-                reset_at,
+                None,
                 now,
                 stale_interval,
             )
@@ -22729,12 +22740,23 @@ Have we met every part of this goal and is there no further work to do?"#
         self.apply_model_selection_inner(model, effort, true, true);
     }
 
-    pub(crate) fn apply_model_selection_debounced(
+    pub(crate) fn preview_session_model_selection(
         &mut self,
         model: String,
         effort: Option<ReasoningEffort>,
     ) {
-        self.apply_model_selection_inner(model, effort, true, false);
+        if self.session_model_preview_original.is_none() {
+            self.session_model_preview_original = Some(SessionModelPreviewOriginal {
+                model: self.config.model.clone(),
+                model_family: self.config.model_family.clone(),
+                model_reasoning_effort: self.config.model_reasoning_effort,
+                preferred_model_reasoning_effort: self.config.preferred_model_reasoning_effort,
+                model_explicit: self.config.model_explicit,
+                chat_model_selected_explicitly: self.chat_model_selected_explicitly,
+            });
+        }
+
+        self.apply_model_selection_inner(model, effort, false, false);
     }
 
     pub(crate) fn apply_debounced_session_model_selection(&mut self, token: u64) {
@@ -22853,10 +22875,12 @@ Have we met every part of this goal and is there no further work to do?"#
             updated = true;
         }
 
-        if let Some(explicit) = effort {
-            if self.config.preferred_model_reasoning_effort != Some(explicit) {
-                self.config.preferred_model_reasoning_effort = Some(explicit);
-                updated = true;
+        if mark_explicit {
+            if let Some(explicit) = effort {
+                if self.config.preferred_model_reasoning_effort != Some(explicit) {
+                    self.config.preferred_model_reasoning_effort = Some(explicit);
+                    updated = true;
+                }
             }
         }
 
@@ -22899,8 +22923,10 @@ Have we met every part of this goal and is there no further work to do?"#
                 self.debounce_session_model_switch(op, false);
             }
 
-            self.sync_follow_chat_models();
-            self.refresh_settings_overview_rows();
+            if announce {
+                self.sync_follow_chat_models();
+                self.refresh_settings_overview_rows();
+            }
             *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
         }
 
@@ -23412,7 +23438,15 @@ Have we met every part of this goal and is there no further work to do?"#
         self.request_redraw();
     }
 
-    pub(crate) fn handle_model_selection_closed(&mut self, target: ModelSelectionKind, _accepted: bool) {
+    pub(crate) fn handle_model_selection_closed(&mut self, target: ModelSelectionKind, accepted: bool) {
+        if target == ModelSelectionKind::Session && !accepted {
+            self.cancel_session_model_preview();
+        }
+
+        if target == ModelSelectionKind::Session && accepted {
+            self.session_model_preview_original = None;
+        }
+
         let expected_section = match target {
             ModelSelectionKind::Session => SettingsSection::Model,
             ModelSelectionKind::Review => SettingsSection::Review,
@@ -23430,6 +23464,44 @@ Have we met every part of this goal and is there no further work to do?"#
             self.pending_settings_return = None;
         }
 
+        self.request_redraw();
+    }
+
+    fn cancel_session_model_preview(&mut self) {
+        let Some(original) = self.session_model_preview_original.take() else {
+            return;
+        };
+
+        self.debounced_session_model_selection = None;
+
+        self.config.model = original.model;
+        self.config.model_family = original.model_family;
+        self.config.model_reasoning_effort = original.model_reasoning_effort;
+        self.config.preferred_model_reasoning_effort = original.preferred_model_reasoning_effort;
+        self.config.model_explicit = original.model_explicit;
+        self.chat_model_selected_explicitly = original.chat_model_selected_explicitly;
+
+        let op = Op::ConfigureSession {
+            provider: self.config.model_provider.clone(),
+            model: self.config.model.clone(),
+            model_explicit: self.config.model_explicit,
+            model_reasoning_effort: self.config.model_reasoning_effort,
+            preferred_model_reasoning_effort: self.config.preferred_model_reasoning_effort,
+            model_reasoning_summary: self.config.model_reasoning_summary,
+            model_text_verbosity: self.config.model_text_verbosity,
+            user_instructions: self.config.user_instructions.clone(),
+            base_instructions: self.config.base_instructions.clone(),
+            approval_policy: self.config.approval_policy.clone(),
+            sandbox_policy: self.config.sandbox_policy.clone(),
+            disable_response_storage: self.config.disable_response_storage,
+            notify: self.config.notify.clone(),
+            cwd: self.config.cwd.clone(),
+            resume_path: None,
+            demo_developer_message: self.config.demo_developer_message.clone(),
+            dynamic_tools: Vec::new(),
+        };
+        self.submit_op(op);
+        *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
         self.request_redraw();
     }
 

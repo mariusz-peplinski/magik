@@ -1528,7 +1528,7 @@ impl App<'_> {
                 }
                 AppEvent::UpdateModelSelectionDebounced { model, effort } => {
                     if let AppState::Chat { widget } = &mut self.app_state {
-                        widget.apply_model_selection_debounced(model, effort);
+                        widget.preview_session_model_selection(model, effort);
                     }
                 }
                 AppEvent::ApplyDebouncedSessionModelSelection { token } => {
