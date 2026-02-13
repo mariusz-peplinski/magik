@@ -1100,6 +1100,8 @@ struct RunningCommand {
 #[derive(Default)]
 struct HeaderHourlyLimitsCache {
     last_refresh: Option<Instant>,
+    last_accounts_mtime: Option<SystemTime>,
+    last_active_account_id: Option<String>,
     plain: String,
     spans: Vec<Span<'static>>,
 }
@@ -7124,6 +7126,16 @@ impl ChatWidget<'_> {
             w.bottom_pane.update_status_text(String::new());
             #[cfg(any(test, feature = "test-helpers"))]
             w.seed_test_mode_greeting();
+        }
+
+        if !w.test_mode {
+            if !auth_accounts::list_accounts(&w.config.code_home)
+                .unwrap_or_default()
+                .is_empty()
+            {
+                w.request_latest_rate_limits(false);
+            }
+            w.refresh_limits_for_other_accounts_if_due();
         }
         w.maybe_start_auto_upgrade_task();
         w
@@ -16091,6 +16103,13 @@ impl ChatWidget<'_> {
                 continue;
             }
 
+            if snapshot_map
+                .get(&account.id)
+                .is_some_and(|record| record.auth_invalid_at.is_some())
+            {
+                continue;
+            }
+
             let reset_at = snapshot_map
                 .get(&account.id)
                 .and_then(|record| record.secondary_next_reset_at);
@@ -16127,6 +16146,23 @@ impl ChatWidget<'_> {
             return;
         }
 
+        if !show_loading {
+            let code_home = &self.config.code_home;
+            let active_id = auth_accounts::get_active_account_id(code_home)
+                .ok()
+                .flatten();
+            if let Some(active_id) = active_id {
+                if account_usage::list_rate_limit_snapshots(code_home)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|record| record.account_id == active_id)
+                    .is_some_and(|record| record.auth_invalid_at.is_some())
+                {
+                    return;
+                }
+            }
+        }
+
         if show_loading {
             self.set_limits_overlay_content(LimitsOverlayContent::Loading);
             self.request_redraw();
@@ -16161,6 +16197,7 @@ impl ChatWidget<'_> {
 
     pub(crate) fn on_rate_limit_refresh_failed(&mut self, message: String) {
         self.rate_limit_fetch_inflight = false;
+        *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
 
         let content = if self.rate_limit_snapshot.is_some() {
             LimitsOverlayContent::Error(message.clone())
@@ -16176,6 +16213,7 @@ impl ChatWidget<'_> {
     }
 
     pub(crate) fn on_rate_limit_snapshot_stored(&mut self, _account_id: String) {
+        *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
         self.refresh_settings_overview_rows();
         let refresh_limits_settings = self
             .settings
@@ -22863,6 +22901,7 @@ Have we met every part of this goal and is there no further work to do?"#
 
             self.sync_follow_chat_models();
             self.refresh_settings_overview_rows();
+            *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
         }
 
         if announce {
@@ -29485,18 +29524,7 @@ Have we met every part of this goal and is there no further work to do?"#
             return (String::new(), Vec::new());
         }
 
-        let now = Instant::now();
         let mut cache = self.header_hourly_limits_cache.borrow_mut();
-        let needs_refresh = cache
-            .last_refresh
-            .map(|prev| now.duration_since(prev) >= HEADER_HOURLY_LIMITS_CACHE_TTL)
-            .unwrap_or(true);
-        if !needs_refresh {
-            return (cache.plain.clone(), cache.spans.clone());
-        }
-
-        cache.last_refresh = Some(now);
-
         let dim_style = ratatui::style::Style::default().fg(crate::colors::text_dim());
         let brand_style = ratatui::style::Style::default()
             .fg(crate::colors::text())
@@ -29504,11 +29532,35 @@ Have we met every part of this goal and is there no further work to do?"#
         let accent_style = ratatui::style::Style::default()
             .fg(crate::colors::info())
             .add_modifier(ratatui::style::Modifier::BOLD);
+        let error_style = ratatui::style::Style::default()
+            .fg(crate::colors::error())
+            .add_modifier(ratatui::style::Modifier::BOLD);
 
         let code_home = &self.config.code_home;
+        let accounts_path = code_home.join("auth_accounts.json");
+        let accounts_mtime = std::fs::metadata(&accounts_path)
+            .and_then(|meta| meta.modified())
+            .ok();
         let active_id = auth_accounts::get_active_account_id(code_home)
             .ok()
             .flatten();
+
+        let now = Instant::now();
+        let ttl_expired = cache
+            .last_refresh
+            .map(|prev| now.duration_since(prev) >= HEADER_HOURLY_LIMITS_CACHE_TTL)
+            .unwrap_or(true);
+        let needs_refresh = ttl_expired
+            || cache.last_accounts_mtime != accounts_mtime
+            || cache.last_active_account_id != active_id;
+        if !needs_refresh {
+            return (cache.plain.clone(), cache.spans.clone());
+        }
+
+        cache.last_refresh = Some(now);
+        cache.last_accounts_mtime = accounts_mtime;
+        cache.last_active_account_id = active_id.clone();
+
         let accounts = auth_accounts::list_accounts(code_home).unwrap_or_default();
         let usage_records = account_usage::list_rate_limit_snapshots(code_home).unwrap_or_default();
         let snapshot_map: HashMap<String, account_usage::StoredRateLimitSnapshot> = usage_records
@@ -29517,6 +29569,18 @@ Have we met every part of this goal and is there no further work to do?"#
             .collect();
         let now_ts = Utc::now();
         let stale_cutoff = now_ts - ChronoDuration::minutes(30);
+
+        let active_email = active_id
+            .as_deref()
+            .and_then(|id| accounts.iter().find(|acc| acc.id == id))
+            .and_then(|account| {
+                account
+                    .tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.id_token.email.clone())
+                    .filter(|email| !email.trim().is_empty())
+                    .or_else(|| account.label.clone())
+            });
 
         let glyph_for_percent = |percent: f64| -> char {
             let percent = percent.clamp(0.0, 100.0);
@@ -29545,8 +29609,8 @@ Have we met every part of this goal and is there no further work to do?"#
 
         let mut plain = String::new();
         let mut spans: Vec<Span<'static>> = Vec::new();
-        spans.push(Span::styled("Hourly: ".to_string(), dim_style));
-        plain.push_str("Hourly: ");
+        spans.push(Span::styled("Limits: ".to_string(), dim_style));
+        plain.push_str("Limits: ");
 
         if accounts.is_empty() {
             spans.push(Span::styled("—".to_string(), dim_style));
@@ -29573,6 +29637,16 @@ Have we met every part of this goal and is there no further work to do?"#
                 record.and_then(|record| record.observed_at)
             };
             let is_stale = observed_at.map(|ts| ts < stale_cutoff).unwrap_or(true);
+
+            if record.is_some_and(|record| record.auth_invalid_at.is_some()) {
+                spans.push(Span::styled("?".to_string(), error_style));
+                plain.push('?');
+                if idx + 1 < accounts.len() {
+                    spans.push(Span::styled(" ".to_string(), dim_style));
+                    plain.push(' ');
+                }
+                continue;
+            }
             let primary_next_reset_at = if is_active {
                 self.rate_limit_primary_next_reset_at
                     .or_else(|| record.and_then(|record| record.primary_next_reset_at))
@@ -29637,6 +29711,16 @@ Have we met every part of this goal and is there no further work to do?"#
         ));
         plain.push_str("  Rotation: ");
         plain.push_str(mode);
+
+        if let Some(email) = active_email {
+            spans.push(Span::styled("  ".to_string(), dim_style));
+            spans.push(Span::styled(
+                email.clone(),
+                ratatui::style::Style::default().fg(crate::colors::info()),
+            ));
+            plain.push_str("  ");
+            plain.push_str(&email);
+        }
 
         cache.plain = plain;
         cache.spans = spans;

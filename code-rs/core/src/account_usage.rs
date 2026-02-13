@@ -97,6 +97,8 @@ struct RateLimitInfo {
     snapshot: Option<RateLimitSnapshotEvent>,
     #[serde(default)]
     observed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    auth_invalid_at: Option<DateTime<Utc>>,
     #[serde(default, alias = "next_reset_at")]
     primary_next_reset_at: Option<DateTime<Utc>>,
     #[serde(default)]
@@ -306,6 +308,7 @@ pub struct StoredRateLimitSnapshot {
     pub plan: Option<String>,
     pub snapshot: Option<RateLimitSnapshotEvent>,
     pub observed_at: Option<DateTime<Utc>>,
+    pub auth_invalid_at: Option<DateTime<Utc>>,
     pub primary_next_reset_at: Option<DateTime<Utc>>,
     pub secondary_next_reset_at: Option<DateTime<Utc>>,
     pub last_usage_limit_hit_at: Option<DateTime<Utc>>,
@@ -440,6 +443,7 @@ pub fn record_rate_limit_snapshot(
     with_usage_file(code_home, account_id, plan, |data| {
         data.last_updated = observed_at;
         let mut info = data.rate_limit.take().unwrap_or_default();
+        info.auth_invalid_at = None;
         info.snapshot = Some(snapshot.clone());
         info.observed_at = Some(observed_at);
         info.primary_next_reset_at = snapshot
@@ -448,6 +452,21 @@ pub fn record_rate_limit_snapshot(
         info.secondary_next_reset_at = snapshot
             .secondary_reset_after_seconds
             .map(|seconds| observed_at + Duration::seconds(seconds as i64));
+        data.rate_limit = Some(info);
+    })
+}
+
+pub fn record_auth_invalid_hint(
+    code_home: &Path,
+    account_id: &str,
+    plan: Option<&str>,
+    observed_at: DateTime<Utc>,
+) -> std::io::Result<()> {
+    with_usage_file(code_home, account_id, plan, |data| {
+        data.last_updated = observed_at;
+        let mut info = data.rate_limit.take().unwrap_or_default();
+        info.auth_invalid_at = Some(observed_at);
+        info.last_refresh_attempt_at = Some(observed_at);
         data.rate_limit = Some(info);
     })
 }
@@ -499,6 +518,7 @@ pub fn list_rate_limit_snapshots(
                 plan: data.plan,
                 snapshot: rate.snapshot,
                 observed_at: rate.observed_at,
+                auth_invalid_at: rate.auth_invalid_at,
                 primary_next_reset_at,
                 secondary_next_reset_at,
                 last_usage_limit_hit_at: rate.last_usage_limit_hit_at,

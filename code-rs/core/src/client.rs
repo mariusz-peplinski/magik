@@ -1534,6 +1534,26 @@ impl ModelClient {
                                     .flatten()
                             });
                         if let Some(current_account_id) = current_account_id {
+                            let plan_type = auth
+                                .as_ref()
+                                .and_then(|a| a.get_plan_type())
+                                .map(|s| s.to_string());
+                            let code_home = self.code_home().to_path_buf();
+                            let account_id = current_account_id.clone();
+                            tokio::task::spawn_blocking(move || {
+                                let observed_at = Utc::now();
+                                if let Err(err) = account_usage::record_auth_invalid_hint(
+                                    &code_home,
+                                    &account_id,
+                                    plan_type.as_deref(),
+                                    observed_at,
+                                ) {
+                                    tracing::warn!(
+                                        "Failed to persist auth invalid hint: {err}"
+                                    );
+                                }
+                            });
+
                             let current_auth_mode = auth
                                 .as_ref()
                                 .map(|a| a.mode)
@@ -1741,6 +1761,37 @@ impl ModelClient {
                             return Err(CodexErr::ServerError(msg));
                         }
 
+                        if status == StatusCode::UNAUTHORIZED {
+                            let current_account_id = auth
+                                .as_ref()
+                                .and_then(|current| current.get_account_id())
+                                .or_else(|| {
+                                    auth_accounts::get_active_account_id(self.code_home())
+                                        .ok()
+                                        .flatten()
+                                });
+                            if let Some(current_account_id) = current_account_id {
+                                let plan_type = auth
+                                    .as_ref()
+                                    .and_then(|a| a.get_plan_type())
+                                    .map(|s| s.to_string());
+                                let code_home = self.code_home().to_path_buf();
+                                tokio::task::spawn_blocking(move || {
+                                    let observed_at = Utc::now();
+                                    if let Err(err) = account_usage::record_auth_invalid_hint(
+                                        &code_home,
+                                        &current_account_id,
+                                        plan_type.as_deref(),
+                                        observed_at,
+                                    ) {
+                                        tracing::warn!(
+                                            "Failed to persist auth invalid hint: {err}"
+                                        );
+                                    }
+                                });
+                            }
+                        }
+
                         return Err(CodexErr::RetryLimit(RetryLimitReachedError {
                             status,
                             request_id: None,
@@ -1931,6 +1982,35 @@ impl ModelClient {
                 }
             }
 
+            if status == StatusCode::UNAUTHORIZED {
+                let current_account_id = auth
+                    .as_ref()
+                    .and_then(|current| current.get_account_id())
+                    .or_else(|| {
+                        auth_accounts::get_active_account_id(self.code_home())
+                            .ok()
+                            .flatten()
+                    });
+                if let Some(current_account_id) = current_account_id {
+                    let plan_type = auth
+                        .as_ref()
+                        .and_then(|a| a.get_plan_type())
+                        .map(|s| s.to_string());
+                    let code_home = self.code_home().to_path_buf();
+                    tokio::task::spawn_blocking(move || {
+                        let observed_at = Utc::now();
+                        if let Err(err) = account_usage::record_auth_invalid_hint(
+                            &code_home,
+                            &current_account_id,
+                            plan_type.as_deref(),
+                            observed_at,
+                        ) {
+                            tracing::warn!("Failed to persist auth invalid hint: {err}");
+                        }
+                    });
+                }
+            }
+
             if status == StatusCode::TOO_MANY_REQUESTS
                 && self.config.auto_switch_accounts_on_rate_limit
                 && auth_manager.is_some()
@@ -2062,6 +2142,31 @@ impl ModelClient {
             }
 
             if !status.is_success() {
+                if status == StatusCode::UNAUTHORIZED {
+                    let current_account_id = auth
+                        .as_ref()
+                        .and_then(|current| current.get_account_id())
+                        .or_else(|| {
+                            auth_accounts::get_active_account_id(self.code_home())
+                                .ok()
+                                .flatten()
+                        });
+                    if let Some(current_account_id) = current_account_id {
+                        let plan_type = auth
+                            .as_ref()
+                            .and_then(|a| a.get_plan_type())
+                            .map(|s| s.to_string());
+                        let code_home = self.code_home().to_path_buf();
+                        if let Err(err) = account_usage::record_auth_invalid_hint(
+                            &code_home,
+                            &current_account_id,
+                            plan_type.as_deref(),
+                            Utc::now(),
+                        ) {
+                            tracing::warn!("Failed to persist auth invalid hint: {err}");
+                        }
+                    }
+                }
                 return Err(CodexErr::UnexpectedStatus(UnexpectedResponseError {
                     status,
                     body,

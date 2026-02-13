@@ -96,6 +96,10 @@ fn usage_is_exhausted(snapshot: &account_usage::StoredRateLimitSnapshot) -> bool
     snapshot.primary_used_percent >= 100.0 || snapshot.secondary_used_percent >= 100.0
 }
 
+fn usage_is_auth_invalid(snapshot: &account_usage::StoredRateLimitSnapshot) -> bool {
+    snapshot.auth_invalid_at.is_some()
+}
+
 fn is_blocked(now: DateTime<Utc>, blocked_until: Option<DateTime<Utc>>) -> bool {
     blocked_until.is_some_and(|until| until > now)
 }
@@ -163,6 +167,13 @@ pub(crate) fn select_next_account_id(
         if snapshot_map
             .get(&account.id)
             .is_some_and(usage_is_exhausted)
+        {
+            continue;
+        }
+
+        if snapshot_map
+            .get(&account.id)
+            .is_some_and(usage_is_auth_invalid)
         {
             continue;
         }
@@ -374,6 +385,9 @@ pub(crate) fn select_preferred_account_id(
         match acc.mode {
             AuthMode::ChatGPT | AuthMode::ChatgptAuthTokens => {
                 if snapshot_map.get(&acc.id).is_some_and(usage_is_exhausted) {
+                    continue;
+                }
+                if snapshot_map.get(&acc.id).is_some_and(usage_is_auth_invalid) {
                     continue;
                 }
                 let used = snapshot_map
