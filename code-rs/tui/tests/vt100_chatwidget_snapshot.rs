@@ -1178,6 +1178,61 @@ fn reasoning_toggle_is_persistent_for_new_blocks() {
 }
 
 #[test]
+fn reasoning_toggle_is_persistent_for_new_reasoning_records() {
+    use code_core::history::state::{
+        HistoryId,
+        InlineSpan,
+        ReasoningBlock,
+        ReasoningSection,
+        ReasoningState,
+        TextEmphasis,
+        TextTone,
+    };
+
+    fn make_reasoning_state(text: &str) -> ReasoningState {
+        let span = InlineSpan {
+            text: text.to_string(),
+            tone: TextTone::Default,
+            emphasis: TextEmphasis::default(),
+            entity: None,
+        };
+
+        ReasoningState {
+            id: HistoryId::ZERO,
+            sections: vec![ReasoningSection {
+                heading: Some("Reasoning".to_string()),
+                summary: None,
+                blocks: vec![ReasoningBlock::Paragraph(vec![span])],
+            }],
+            effort: None,
+            in_progress: false,
+        }
+    }
+
+    let mut harness = ChatWidgetHarness::new();
+
+    harness.toggle_reasoning_visibility();
+    harness.push_reasoning_record(make_reasoning_state(
+        "This structured reasoning record should start expanded.",
+    ));
+    assert_eq!(
+        Some(false),
+        harness.last_reasoning_is_collapsed(),
+        "expected new reasoning record to start expanded",
+    );
+
+    harness.toggle_reasoning_visibility();
+    harness.push_reasoning_record(make_reasoning_state(
+        "This structured reasoning record should start collapsed.",
+    ));
+    assert_eq!(
+        Some(true),
+        harness.last_reasoning_is_collapsed(),
+        "expected new reasoning record to start collapsed",
+    );
+}
+
+#[test]
 fn explore_details_toggle_is_separate_from_reasoning() {
     use code_core::history::state::{
         ExecAction,
@@ -1227,6 +1282,28 @@ fn explore_details_toggle_is_separate_from_reasoning() {
     assert!(
         !full.contains("⋮"),
         "expected Explore to show full detail when enabled; got:\n{full}"
+    );
+
+    // New Explore blocks should also honor the latest setting.
+    let record_two = ExploreRecord {
+        id: HistoryId::ZERO,
+        entries: (0..7)
+            .map(|idx| ExploreEntry {
+                action: ExecAction::Read,
+                summary: ExploreSummary::Read {
+                    display_path: format!("src/other_{idx}.rs"),
+                    annotation: None,
+                    range: None,
+                },
+                status: ExploreEntryStatus::Success,
+            })
+            .collect(),
+    };
+    harness.push_explore_record(record_two);
+    let full_two = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 24));
+    assert!(
+        !full_two.contains("⋮"),
+        "expected new Explore blocks to keep full detail; got:\n{full_two}"
     );
 }
 

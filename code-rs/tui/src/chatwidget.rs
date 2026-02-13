@@ -10299,9 +10299,11 @@ impl ChatWidget<'_> {
             HistoryRecord::UpgradeNotice(state) => Some(Box::new(
                 history_cell::UpgradeNoticeCell::from_state(state.clone()),
             )),
-            HistoryRecord::Reasoning(state) => Some(Box::new(
-                history_cell::CollapsibleReasoningCell::from_state(state.clone()),
-            )),
+            HistoryRecord::Reasoning(state) => {
+                let cell = history_cell::CollapsibleReasoningCell::from_state(state.clone());
+                cell.set_collapsed(!self.config.tui.show_reasoning);
+                Some(Box::new(cell))
+            }
             HistoryRecord::Exec(state) => {
                 Some(Box::new(history_cell::ExecCell::from_record(state.clone())))
             }

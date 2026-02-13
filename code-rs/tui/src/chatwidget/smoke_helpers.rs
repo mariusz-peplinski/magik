@@ -14,6 +14,7 @@ use code_core::config::{Config, ConfigOverrides, ConfigToml};
 use code_core::history::state::ExploreRecord;
 use code_core::history::state::HistoryDomainRecord;
 use code_core::history::state::HistoryRecord;
+use code_core::history::state::ReasoningState;
 use code_core::history::state::ExecStatus;
 use code_core::protocol::{BackgroundEventEvent, Event, EventMsg, OrderMeta};
 use once_cell::sync::Lazy;
@@ -504,6 +505,17 @@ impl ChatWidgetHarness {
         let id = Some(stream_id.into());
         self.chat
             .insert_history_lines_with_kind(StreamKind::Reasoning, id, rendered.lines.drain(..).collect());
+    }
+
+    pub fn push_reasoning_record(&mut self, state: ReasoningState) {
+        let key = self.chat.next_internal_key();
+        let cell = history_cell::CollapsibleReasoningCell::from_state(state.clone());
+        let _ = self.chat.history_insert_with_key_global_tagged(
+            Box::new(cell),
+            key,
+            "reasoning",
+            Some(HistoryDomainRecord::Reasoning(state)),
+        );
     }
 
     pub fn push_explore_record(&mut self, record: ExploreRecord) {

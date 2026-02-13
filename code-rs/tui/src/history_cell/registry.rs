@@ -33,7 +33,11 @@ pub(crate) fn cell_from_record(record: &HistoryRecord, cfg: &Config) -> Box<dyn 
         HistoryRecord::ToolCall(state) => Box::new(ToolCallCell::from_state(state.clone())),
         HistoryRecord::PlanUpdate(state) => Box::new(PlanUpdateCell::from_state(state.clone())),
         HistoryRecord::UpgradeNotice(state) => Box::new(UpgradeNoticeCell::from_state(state.clone())),
-        HistoryRecord::Reasoning(state) => Box::new(CollapsibleReasoningCell::from_state(state.clone())),
+        HistoryRecord::Reasoning(state) => {
+            let cell = CollapsibleReasoningCell::from_state(state.clone());
+            cell.set_collapsed(!cfg.tui.show_reasoning);
+            Box::new(cell)
+        }
         HistoryRecord::Exec(state) => Box::new(ExecCell::from_record(state.clone())),
         HistoryRecord::MergedExec(state) => Box::new(MergedExecCell::from_state(state.clone())),
         HistoryRecord::AssistantStream(state) => {
