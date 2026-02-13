@@ -24061,6 +24061,7 @@ Have we met every part of this goal and is there no further work to do?"#
             return;
         }
         self.config.account_switching_mode = mode;
+        *self.header_hourly_limits_cache.borrow_mut() = HeaderHourlyLimitsCache::default();
 
         let code_home = self.config.code_home.clone();
         let profile = self.config.active_profile.clone();
