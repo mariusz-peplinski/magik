@@ -6859,6 +6859,8 @@ impl ChatWidget<'_> {
             remote_model_presets: None,
             allow_remote_default_at_startup: !config.model_explicit,
             chat_model_selected_explicitly: false,
+            debounced_session_model_selection: None,
+            debounced_session_model_selection_token: 0,
             planning_restore: None,
             history_debug_events: if history_cell_logging_enabled() {
                 Some(RefCell::new(Vec::new()))
