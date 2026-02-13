@@ -479,6 +479,7 @@ impl HistoryRenderState {
                 let height = if settings.block_type_labels_visible
                     && settings.width > 0
                     && has_custom_render
+                    && height > 0
                     && req
                         .cell
                         .and_then(|cell| block_type_label_for_cell_kind(cell.kind()))

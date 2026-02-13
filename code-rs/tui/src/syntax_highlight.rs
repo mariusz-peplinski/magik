@@ -340,7 +340,7 @@ fn current_theme_name<'a>(ts: &'a ThemeSet) -> &'a str {
 fn blending_enabled() -> bool { false }
 
 fn default_theme<'a>() -> &'a Theme {
-    // Use the currently selected theme (rotatable via Ctrl+Y)
+    // Use the currently selected theme.
     let ts = themes();
     let name = current_theme_name(ts);
     // Prefer the Solarized themes; fall back to first available if missing.

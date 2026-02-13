@@ -22112,7 +22112,7 @@ Have we met every part of this goal and is there no further work to do?"#
         // Global
         lines.push(kv("F1", "Help overlay"));
         lines.push(kv("Ctrl+G", "Open external editor"));
-        lines.push(kv("Ctrl+M", "Switch model"));
+        lines.push(kv("Ctrl+Y", "Switch model"));
         lines.push(kv("Ctrl+N", "Cycle reasoning level"));
         lines.push(kv("Ctrl+R", "Toggle reasoning"));
         lines.push(kv("Ctrl+E", "Toggle explore details"));
@@ -24875,7 +24875,7 @@ Have we met every part of this goal and is there no further work to do?"#
         SettingsSection::from_hint(section)
     }
 
-    // Ctrl+Y syntax cycling disabled intentionally.
+    // Ctrl+Y is reserved for switching models.
 
     /// Show a brief debug notice in the footer.
     #[allow(dead_code)]
@@ -29589,7 +29589,7 @@ Have we met every part of this goal and is there no further work to do?"#
                     Style::default().fg(crate::colors::info()),
                 ));
                 spans.push(Span::styled(
-                    " (Ctrl+M)",
+                    " (Ctrl+Y)",
                     Style::default().fg(crate::colors::text_dim()),
                 ));
             }
@@ -39704,7 +39704,14 @@ impl WidgetRef for &ChatWidget<'_> {
                         #[cfg(debug_assertions)]
                         {
                             let mut preview: Option<String> = None;
-                            let fresh = item.desired_height(content_width);
+                            let mut fresh = item.desired_height(content_width);
+                            if render_settings.block_type_labels_visible
+                                && item.has_custom_render()
+                                && fresh > 0
+                                && block_type_label_for_cell_kind(item.kind()).is_some()
+                            {
+                                fresh = fresh.saturating_add(1);
+                            }
                             if fresh != item_height {
                                 if preview.is_none() {
                                     let lines = item.display_lines_trimmed();

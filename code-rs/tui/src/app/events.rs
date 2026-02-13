@@ -520,15 +520,15 @@ impl App<'_> {
                             }
                         }
                         KeyEvent {
-                            code: KeyCode::Char('m'),
+                            code: KeyCode::Char('y') | KeyCode::Char('Y'),
                             kind: KeyEventKind::Press | KeyEventKind::Repeat,
                             ..
                         } if key_event
                             .modifiers
                             .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
-                            // Ctrl+M: switch model
-                            // Ctrl+Shift+M: toggle mouse capture for text selection
+                            // Ctrl+Y: switch model
+                            // Ctrl+Shift+Y: toggle mouse capture for text selection
                             if key_event
                                 .modifiers
                                 .contains(crossterm::event::KeyModifiers::SHIFT)
@@ -602,7 +602,7 @@ impl App<'_> {
                                 widget.toggle_diffs_popup();
                             }
                         }
-                        // (Ctrl+Y disabled): Previously cycled syntax themes; now intentionally no-op
+                        // Ctrl+Y: switch model (handled above)
                         KeyEvent {
                             kind: KeyEventKind::Press | KeyEventKind::Repeat,
                             ..
