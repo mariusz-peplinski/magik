@@ -275,6 +275,15 @@ pub(crate) enum AppEvent {
         effort: Option<ReasoningEffort>,
     },
 
+    /// Update the chat model selection in the UI, but debounce ConfigureSession.
+    UpdateModelSelectionDebounced {
+        model: String,
+        effort: Option<ReasoningEffort>,
+    },
+
+    /// Apply a debounced chat-model switch after a user stops cycling quickly.
+    ApplyDebouncedSessionModelSelection { token: u64 },
+
     /// Update the dedicated review model + reasoning effort
     UpdateReviewModelSelection {
         model: String,

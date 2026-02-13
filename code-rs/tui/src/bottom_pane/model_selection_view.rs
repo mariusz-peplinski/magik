@@ -552,10 +552,12 @@ impl ModelSelectionView {
         match key_event {
             KeyEvent { code: KeyCode::Up, modifiers: KeyModifiers::NONE, .. } => {
                 self.move_selection_up();
+                self.maybe_debounce_session_preview();
                 true
             }
             KeyEvent { code: KeyCode::Down, modifiers: KeyModifiers::NONE, .. } => {
                 self.move_selection_down();
+                self.maybe_debounce_session_preview();
                 true
             }
             KeyEvent { code: KeyCode::Enter, modifiers: KeyModifiers::NONE, .. } => {
@@ -568,6 +570,28 @@ impl ModelSelectionView {
             }
             _ => false,
         }
+    }
+
+    fn maybe_debounce_session_preview(&mut self) {
+        if self.target != ModelSelectionTarget::Session {
+            return;
+        }
+
+        let entries = self.entries();
+        let Some(entry) = entries.get(self.selected_index) else {
+            return;
+        };
+        let EntryKind::Preset(idx) = entry else {
+            return;
+        };
+        let Some(flat_preset) = self.flat_presets.get(*idx) else {
+            return;
+        };
+
+        let _ = self.app_event_tx.send(AppEvent::UpdateModelSelectionDebounced {
+            model: flat_preset.model.clone(),
+            effort: Some(flat_preset.effort),
+        });
     }
 
     fn send_closed(&mut self, accepted: bool) {

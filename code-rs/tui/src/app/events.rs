@@ -1526,6 +1526,16 @@ impl App<'_> {
                         widget.apply_model_selection(model, effort);
                     }
                 }
+                AppEvent::UpdateModelSelectionDebounced { model, effort } => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.apply_model_selection_debounced(model, effort);
+                    }
+                }
+                AppEvent::ApplyDebouncedSessionModelSelection { token } => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.apply_debounced_session_model_selection(token);
+                    }
+                }
                 AppEvent::UpdateReviewModelSelection { model, effort } => {
                     if let AppState::Chat { widget } = &mut self.app_state {
                         widget.apply_review_model_selection(model, effort);

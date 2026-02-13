@@ -1108,6 +1108,7 @@ const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [50.0, 75.0, 90.0];
 const RATE_LIMIT_REFRESH_INTERVAL: chrono::Duration = chrono::Duration::minutes(10);
 
 const HEADER_HOURLY_LIMITS_CACHE_TTL: Duration = Duration::from_secs(30);
+const SESSION_MODEL_SWITCH_DEBOUNCE: Duration = Duration::from_secs(2);
 
 const MAX_TRACKED_GHOST_COMMITS: usize = 20;
 const GHOST_SNAPSHOT_NOTICE_THRESHOLD: Duration = Duration::from_secs(4);
@@ -1124,6 +1125,13 @@ struct RateLimitWarning {
 struct RateLimitWarningState {
     weekly_index: usize,
     hourly_index: usize,
+}
+
+#[derive(Debug, Clone)]
+struct DebouncedSessionModelSelection {
+    token: u64,
+    op: Op,
+    announce: bool,
 }
 
 impl RateLimitWarningState {
@@ -1534,6 +1542,9 @@ pub(crate) struct ChatWidget<'a> {
     allow_remote_default_at_startup: bool,
     /// Tracks whether the user explicitly selected a chat model in this session.
     chat_model_selected_explicitly: bool,
+
+    debounced_session_model_selection: Option<DebouncedSessionModelSelection>,
+    debounced_session_model_selection_token: u64,
 
     planning_restore: Option<(String, ReasoningEffort)>,
     history_debug_events: Option<RefCell<Vec<String>>>,
@@ -6469,6 +6480,8 @@ impl ChatWidget<'_> {
             remote_model_presets: None,
             allow_remote_default_at_startup: !config.model_explicit,
             chat_model_selected_explicitly: false,
+            debounced_session_model_selection: None,
+            debounced_session_model_selection_token: 0,
             planning_restore: None,
             history_debug_events: if history_cell_logging_enabled() {
                 Some(RefCell::new(Vec::new()))
@@ -11903,6 +11916,7 @@ impl ChatWidget<'_> {
         }
 
         if !combined_items.is_empty() {
+            self.flush_debounced_session_model_selection();
             self.flush_pending_agent_notes();
             if let Err(e) = self
                 .code_op_tx
@@ -11927,6 +11941,7 @@ impl ChatWidget<'_> {
             "[queue] Dispatching single queued message via coordinator (queue_remaining={})",
             self.queued_user_messages.len()
         );
+        self.flush_debounced_session_model_selection();
         match self.code_op_tx.send(Op::QueueUserInput { items }) {
             Ok(()) => {
                 self.finalize_sent_user_message(message);
@@ -11949,6 +11964,8 @@ impl ChatWidget<'_> {
             batch.len(),
             self.auto_state.is_active()
         );
+
+        self.flush_debounced_session_model_selection();
 
         for message in batch {
             let Some(message) = self.take_queued_user_message(&message) else {
@@ -13100,6 +13117,13 @@ impl ChatWidget<'_> {
                 tracing::error!("failed to send AddToHistory op: {e}");
             }
         }
+    }
+
+    fn flush_debounced_session_model_selection(&mut self) {
+        let Some(pending) = self.debounced_session_model_selection.take() else {
+            return;
+        };
+        self.submit_op(pending.op);
     }
 
     fn finalize_sent_user_message(&mut self, message: UserMessage) {
@@ -22665,6 +22689,60 @@ Have we met every part of this goal and is there no further work to do?"#
         self.apply_model_selection_inner(model, effort, true, true);
     }
 
+    pub(crate) fn apply_model_selection_debounced(
+        &mut self,
+        model: String,
+        effort: Option<ReasoningEffort>,
+    ) {
+        self.apply_model_selection_inner(model, effort, true, false);
+    }
+
+    pub(crate) fn apply_debounced_session_model_selection(&mut self, token: u64) {
+        let Some(pending) = self.debounced_session_model_selection.take() else {
+            return;
+        };
+        if pending.token != token {
+            self.debounced_session_model_selection = Some(pending);
+            return;
+        }
+
+        self.submit_op(pending.op);
+        if pending.announce {
+            let placement = self.ui_placement_for_now();
+            let state = history_cell::new_model_output(
+                &self.config.model,
+                self.config.model_reasoning_effort,
+            );
+            let cell = crate::history_cell::PlainHistoryCell::from_state(state.clone());
+            self.push_system_cell(
+                Box::new(cell),
+                placement,
+                Some("ui:model".to_string()),
+                None,
+                "system",
+                Some(HistoryDomainRecord::Plain(state)),
+            );
+        }
+        self.request_redraw();
+    }
+
+    fn debounce_session_model_switch(&mut self, op: Op, announce: bool) {
+        self.debounced_session_model_selection_token =
+            self.debounced_session_model_selection_token.wrapping_add(1);
+        let token = self.debounced_session_model_selection_token;
+        self.debounced_session_model_selection = Some(DebouncedSessionModelSelection {
+            token,
+            op,
+            announce,
+        });
+
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(SESSION_MODEL_SWITCH_DEBOUNCE).await;
+            tx.send(crate::app_event::AppEvent::ApplyDebouncedSessionModelSelection { token });
+        });
+    }
+
     fn clamp_reasoning_for_model_from_presets(
         model: &str,
         requested: ReasoningEffort,
@@ -22773,7 +22851,13 @@ Have we met every part of this goal and is there no further work to do?"#
                 demo_developer_message: self.config.demo_developer_message.clone(),
                 dynamic_tools: Vec::new(),
             };
-            self.submit_op(op);
+
+            if announce {
+                self.debounced_session_model_selection = None;
+                self.submit_op(op);
+            } else {
+                self.debounce_session_model_switch(op, false);
+            }
 
             self.sync_follow_chat_models();
             self.refresh_settings_overview_rows();
@@ -23981,6 +24065,7 @@ Have we met every part of this goal and is there no further work to do?"#
         let code_home = self.config.code_home.clone();
         let profile = self.config.active_profile.clone();
         let mode_value = match mode {
+            code_core::config_types::AccountSwitchingMode::Manual => "manual",
             code_core::config_types::AccountSwitchingMode::OnLimit => "on-limit",
             code_core::config_types::AccountSwitchingMode::EvenUsage => "even-usage",
             code_core::config_types::AccountSwitchingMode::Step45 => "step-45",
@@ -24529,6 +24614,7 @@ Have we met every part of this goal and is there no further work to do?"#
         };
 
         let mode = match self.config.account_switching_mode {
+            code_core::config_types::AccountSwitchingMode::Manual => "Manual",
             code_core::config_types::AccountSwitchingMode::OnLimit => "On limit",
             code_core::config_types::AccountSwitchingMode::EvenUsage => "Even",
             code_core::config_types::AccountSwitchingMode::Step45 => "Step 45%",
@@ -29106,6 +29192,7 @@ Have we met every part of this goal and is there no further work to do?"#
         }
 
         let items = message.ordered_items.clone();
+        self.flush_debounced_session_model_selection();
         if let Err(e) = self.code_op_tx.send(Op::UserInput {
             items,
             final_output_json_schema: None,
@@ -29426,6 +29513,7 @@ Have we met every part of this goal and is there no further work to do?"#
             .map(|record| (record.account_id.clone(), record))
             .collect();
         let now_ts = Utc::now();
+        let stale_cutoff = now_ts - ChronoDuration::minutes(30);
 
         let glyph_for_percent = |percent: f64| -> char {
             let percent = percent.clamp(0.0, 100.0);
@@ -29475,6 +29563,13 @@ Have we met every part of this goal and is there no further work to do?"#
             } else {
                 record.and_then(|record| record.snapshot.as_ref())
             };
+            let observed_at = if is_active {
+                self.rate_limit_last_fetch_at
+                    .or_else(|| record.and_then(|record| record.observed_at))
+            } else {
+                record.and_then(|record| record.observed_at)
+            };
+            let is_stale = observed_at.map(|ts| ts < stale_cutoff).unwrap_or(true);
             let primary_next_reset_at = if is_active {
                 self.rate_limit_primary_next_reset_at
                     .or_else(|| record.and_then(|record| record.primary_next_reset_at))
@@ -29487,6 +29582,17 @@ Have we met every part of this goal and is there no further work to do?"#
             } else {
                 record.and_then(|record| record.secondary_next_reset_at)
             };
+
+            if snapshot.is_none() || is_stale {
+                let style = if is_active { accent_style } else { brand_style };
+                spans.push(Span::styled("?".to_string(), style));
+                plain.push('?');
+                if idx + 1 < accounts.len() {
+                    spans.push(Span::styled(" ".to_string(), dim_style));
+                    plain.push(' ');
+                }
+                continue;
+            }
 
             let primary_used = snapshot.map(|s| s.primary_used_percent).unwrap_or(0.0);
             let secondary_used = snapshot.map(|s| s.secondary_used_percent).unwrap_or(0.0);
@@ -29513,6 +29619,21 @@ Have we met every part of this goal and is there no further work to do?"#
                 plain.push(' ');
             }
         }
+
+        let mode = match self.config.account_switching_mode {
+            code_core::config_types::AccountSwitchingMode::Manual => "Manual",
+            code_core::config_types::AccountSwitchingMode::OnLimit => "On limit",
+            code_core::config_types::AccountSwitchingMode::EvenUsage => "Even usage",
+            code_core::config_types::AccountSwitchingMode::Step45 => "Step 45%",
+            code_core::config_types::AccountSwitchingMode::ResetBased => "Reset-based",
+        };
+        spans.push(Span::styled("  Rotation: ".to_string(), dim_style));
+        spans.push(Span::styled(
+            mode.to_string(),
+            ratatui::style::Style::default().fg(crate::colors::text()),
+        ));
+        plain.push_str("  Rotation: ");
+        plain.push_str(mode);
 
         cache.plain = plain;
         cache.spans = spans;

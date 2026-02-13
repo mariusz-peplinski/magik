@@ -62,6 +62,7 @@ impl AccountSwitchSettingsView {
 
     fn switching_mode_label(mode: AccountSwitchingMode) -> &'static str {
         match mode {
+            AccountSwitchingMode::Manual => "Manual",
             AccountSwitchingMode::OnLimit => "On limit",
             AccountSwitchingMode::EvenUsage => "Even usage",
             AccountSwitchingMode::Step45 => "Step 45%",
@@ -71,6 +72,9 @@ impl AccountSwitchSettingsView {
 
     fn switching_mode_description(mode: AccountSwitchingMode) -> &'static str {
         match mode {
+            AccountSwitchingMode::Manual => {
+                "Never auto-switch accounts; stick to the currently active account."
+            }
             AccountSwitchingMode::OnLimit => "Only switches when the active account is limited.",
             AccountSwitchingMode::EvenUsage => "Keeps accounts within ~10% usage of each other.",
             AccountSwitchingMode::Step45 => "Rotates when an account crosses 45% steps.",
@@ -82,10 +86,11 @@ impl AccountSwitchSettingsView {
 
     fn next_switching_mode(mode: AccountSwitchingMode) -> AccountSwitchingMode {
         match mode {
+            AccountSwitchingMode::Manual => AccountSwitchingMode::OnLimit,
             AccountSwitchingMode::OnLimit => AccountSwitchingMode::EvenUsage,
             AccountSwitchingMode::EvenUsage => AccountSwitchingMode::Step45,
             AccountSwitchingMode::Step45 => AccountSwitchingMode::ResetBased,
-            AccountSwitchingMode::ResetBased => AccountSwitchingMode::OnLimit,
+            AccountSwitchingMode::ResetBased => AccountSwitchingMode::Manual,
         }
     }
 
