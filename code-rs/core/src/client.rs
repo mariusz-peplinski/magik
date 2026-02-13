@@ -1023,7 +1023,11 @@ impl ModelClient {
         let mut rate_limit_switch_state = crate::account_switching::RateLimitSwitchState::default();
 
         if self.config.auto_switch_accounts_on_rate_limit
-            && self.config.account_switching_mode != crate::config_types::AccountSwitchingMode::OnLimit
+            && !matches!(
+                self.config.account_switching_mode,
+                crate::config_types::AccountSwitchingMode::Manual
+                    | crate::config_types::AccountSwitchingMode::OnLimit
+            )
             && auth_manager.is_some()
             && auth::read_code_api_key_from_env().is_none()
         {
@@ -1329,10 +1333,13 @@ impl ModelClient {
                         .and_then(|v| v.to_str().ok())
                         .and_then(|raw| parse_retry_after_header(raw, now));
 
+                    let mut auth_refreshed = false;
                     if status == StatusCode::UNAUTHORIZED {
                         if let Some(manager) = auth_manager.as_ref() {
                             match manager.refresh_token_classified().await {
-                                Ok(Some(_)) => {}
+                                Ok(Some(_)) => {
+                                    auth_refreshed = true;
+                                }
                                 Ok(None) => {
                                     auth_refresh_error = Some(RefreshTokenError::permanent(
                                         AUTH_REQUIRED_MESSAGE,
@@ -1347,6 +1354,11 @@ impl ModelClient {
                                 "Authentication manager unavailable; please log in again.",
                             ));
                         }
+                    }
+
+                    if auth_refreshed {
+                        attempt = 0;
+                        continue;
                     }
 
                     // Read the response body once for diagnostics across error branches.
@@ -1374,6 +1386,8 @@ impl ModelClient {
                         && self.config.auto_switch_accounts_on_rate_limit
                         && auth_manager.is_some()
                         && auth::read_code_api_key_from_env().is_none()
+                        && self.config.account_switching_mode
+                            != crate::config_types::AccountSwitchingMode::Manual
                     {
                         let current_account_id = auth
                             .as_ref()
@@ -1486,6 +1500,81 @@ impl ModelClient {
                                         to_account_id = %next_account_id,
                                         error = %err,
                                         "failed to activate account after rate limit"
+                                    );
+                                } else {
+                                    if let Some(manager) = auth_manager.as_ref() {
+                                        manager.reload();
+                                    }
+                                    attempt = 0;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    if status == StatusCode::UNAUTHORIZED
+                        && self.config.auto_switch_accounts_on_rate_limit
+                        && auth_manager.is_some()
+                        && auth::read_code_api_key_from_env().is_none()
+                        && self.config.account_switching_mode
+                            != crate::config_types::AccountSwitchingMode::Manual
+                    {
+                        let current_account_id = auth
+                            .as_ref()
+                            .and_then(|current| current.get_account_id())
+                            .or_else(|| {
+                                auth_accounts::get_active_account_id(self.code_home())
+                                    .ok()
+                                    .flatten()
+                            });
+                        if let Some(current_account_id) = current_account_id {
+                            let current_auth_mode = auth
+                                .as_ref()
+                                .map(|a| a.mode)
+                                .unwrap_or(AuthMode::ApiKey);
+                            rate_limit_switch_state.mark_limited(
+                                &current_account_id,
+                                current_auth_mode,
+                                None,
+                            );
+
+                            if let Ok(Some(next_account_id)) =
+                                crate::account_switching::select_next_account_id(
+                                    self.code_home(),
+                                    &rate_limit_switch_state,
+                                    self.config.api_key_fallback_on_all_accounts_limited,
+                                    self.config.account_switching_mode,
+                                    now,
+                                    Some(current_account_id.as_str()),
+                                )
+                            {
+                                tracing::info!(
+                                    from_account_id = %current_account_id,
+                                    to_account_id = %next_account_id,
+                                    "received 401; auto-switching active account"
+                                );
+
+                                if let Ok(logger) = self.debug_logger.lock() {
+                                    let _ = logger.append_response_event(
+                                        &request_id,
+                                        "account_switch",
+                                        &serde_json::json!({
+                                            "reason": "http_401",
+                                            "from_account_id": current_account_id.clone(),
+                                            "to_account_id": next_account_id.clone(),
+                                            "status": status.as_u16(),
+                                        }),
+                                    );
+                                }
+
+                                if let Err(err) =
+                                    auth::activate_account(self.code_home(), &next_account_id)
+                                {
+                                    tracing::warn!(
+                                        from_account_id = %current_account_id,
+                                        to_account_id = %next_account_id,
+                                        error = %err,
+                                        "failed to activate account after unauthorized"
                                     );
                                 } else {
                                     if let Some(manager) = auth_manager.as_ref() {
@@ -1816,10 +1905,26 @@ impl ModelClient {
             let status = response.status();
             let body = response.text().await?;
 
+            if status == StatusCode::UNAUTHORIZED {
+                if let Some(manager) = auth_manager.as_ref() {
+                    if manager
+                        .refresh_token_classified()
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some()
+                    {
+                        continue;
+                    }
+                }
+            }
+
             if status == StatusCode::TOO_MANY_REQUESTS
                 && self.config.auto_switch_accounts_on_rate_limit
                 && auth_manager.is_some()
                 && auth::read_code_api_key_from_env().is_none()
+                && self.config.account_switching_mode
+                    != crate::config_types::AccountSwitchingMode::Manual
             {
                 let now = Utc::now();
                 let current_account_id = auth
@@ -1861,6 +1966,64 @@ impl ModelClient {
                                 to_account_id = %next_account_id,
                                 error = %err,
                                 "failed to activate account after rate limit during compact"
+                            );
+                        } else {
+                            if let Some(manager) = auth_manager.as_ref() {
+                                manager.reload();
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            if status == StatusCode::UNAUTHORIZED
+                && self.config.auto_switch_accounts_on_rate_limit
+                && auth_manager.is_some()
+                && auth::read_code_api_key_from_env().is_none()
+                && self.config.account_switching_mode
+                    != crate::config_types::AccountSwitchingMode::Manual
+            {
+                let now = Utc::now();
+                let current_account_id = auth
+                    .as_ref()
+                    .and_then(|current| current.get_account_id())
+                    .or_else(|| {
+                        auth_accounts::get_active_account_id(self.code_home())
+                            .ok()
+                            .flatten()
+                    });
+                if let Some(current_account_id) = current_account_id {
+                    let current_auth_mode = auth
+                        .as_ref()
+                        .map(|a| a.mode)
+                        .unwrap_or(AuthMode::ApiKey);
+                    rate_limit_switch_state.mark_limited(
+                        &current_account_id,
+                        current_auth_mode,
+                        None,
+                    );
+                    if let Ok(Some(next_account_id)) =
+                        crate::account_switching::select_next_account_id(
+                            self.code_home(),
+                            &rate_limit_switch_state,
+                            self.config.api_key_fallback_on_all_accounts_limited,
+                            self.config.account_switching_mode,
+                            now,
+                            Some(current_account_id.as_str()),
+                        )
+                    {
+                        tracing::info!(
+                            from_account_id = %current_account_id,
+                            to_account_id = %next_account_id,
+                            "received 401 during compact; auto-switching active account"
+                        );
+                        if let Err(err) = auth::activate_account(self.code_home(), &next_account_id) {
+                            tracing::warn!(
+                                from_account_id = %current_account_id,
+                                to_account_id = %next_account_id,
+                                error = %err,
+                                "failed to activate account after unauthorized during compact"
                             );
                         } else {
                             if let Some(manager) = auth_manager.as_ref() {

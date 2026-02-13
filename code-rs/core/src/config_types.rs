@@ -21,6 +21,10 @@ pub const DEFAULT_OTEL_ENVIRONMENT: &str = "dev";
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum AccountSwitchingMode {
+    /// Never auto-switch accounts. Stick to the currently active account unless
+    /// the user changes it explicitly (e.g. via `/login`).
+    #[serde(rename = "manual")]
+    Manual,
     /// Only switch accounts after hitting a rate/usage limit (current behavior).
     #[serde(rename = "on-limit")]
     OnLimit,

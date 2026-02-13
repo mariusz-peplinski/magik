@@ -108,6 +108,10 @@ pub(crate) fn select_next_account_id(
     now: DateTime<Utc>,
     current_account_id: Option<&str>,
 ) -> io::Result<Option<String>> {
+    if mode == AccountSwitchingMode::Manual {
+        return Ok(None);
+    }
+
     let current = match current_account_id {
         Some(id) => Some(id.to_string()),
         None => auth_accounts::get_active_account_id(code_home)?,
@@ -394,6 +398,7 @@ pub(crate) fn select_preferred_account_id(
     let current = current_account_id;
 
     let pick = match mode {
+        AccountSwitchingMode::Manual => None,
         AccountSwitchingMode::OnLimit => None,
         AccountSwitchingMode::EvenUsage => {
             let flat: Vec<(String, f64)> = chatgpt_candidates
