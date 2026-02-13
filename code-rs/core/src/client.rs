@@ -1021,6 +1021,8 @@ impl ModelClient {
         let max_retries = self.provider.request_max_retries();
         let mut request_id = String::new();
         let mut rate_limit_switch_state = crate::account_switching::RateLimitSwitchState::default();
+        let mut unauthorized_refresh_attempts: u8 = 0;
+        const MAX_UNAUTHORIZED_REFRESH_RETRIES: u8 = 1;
 
         if self.config.auto_switch_accounts_on_rate_limit
             && !matches!(
@@ -1334,11 +1336,15 @@ impl ModelClient {
                         .and_then(|raw| parse_retry_after_header(raw, now));
 
                     let mut auth_refreshed = false;
-                    if status == StatusCode::UNAUTHORIZED {
+                    if status == StatusCode::UNAUTHORIZED
+                        && unauthorized_refresh_attempts < MAX_UNAUTHORIZED_REFRESH_RETRIES
+                    {
                         if let Some(manager) = auth_manager.as_ref() {
                             match manager.refresh_token_classified().await {
                                 Ok(Some(_)) => {
                                     auth_refreshed = true;
+                                    unauthorized_refresh_attempts =
+                                        unauthorized_refresh_attempts.saturating_add(1);
                                 }
                                 Ok(None) => {
                                     auth_refresh_error = Some(RefreshTokenError::permanent(
@@ -1820,6 +1826,8 @@ impl ModelClient {
 
         let auth_manager = self.auth_manager.clone();
         let mut rate_limit_switch_state = crate::account_switching::RateLimitSwitchState::default();
+        let mut unauthorized_refresh_attempts: u8 = 0;
+        const MAX_UNAUTHORIZED_REFRESH_RETRIES: u8 = 1;
 
         let model_slug = prompt
             .model_override
@@ -1905,7 +1913,9 @@ impl ModelClient {
             let status = response.status();
             let body = response.text().await?;
 
-            if status == StatusCode::UNAUTHORIZED {
+            if status == StatusCode::UNAUTHORIZED
+                && unauthorized_refresh_attempts < MAX_UNAUTHORIZED_REFRESH_RETRIES
+            {
                 if let Some(manager) = auth_manager.as_ref() {
                     if manager
                         .refresh_token_classified()
@@ -1914,6 +1924,8 @@ impl ModelClient {
                         .flatten()
                         .is_some()
                     {
+                        unauthorized_refresh_attempts =
+                            unauthorized_refresh_attempts.saturating_add(1);
                         continue;
                     }
                 }
