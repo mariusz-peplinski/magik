@@ -1097,8 +1097,17 @@ struct RunningCommand {
     wait_notes: Vec<(String, bool)>,
 }
 
+#[derive(Default)]
+struct HeaderHourlyLimitsCache {
+    last_refresh: Option<Instant>,
+    plain: String,
+    spans: Vec<Span<'static>>,
+}
+
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [50.0, 75.0, 90.0];
 const RATE_LIMIT_REFRESH_INTERVAL: chrono::Duration = chrono::Duration::minutes(10);
+
+const HEADER_HOURLY_LIMITS_CACHE_TTL: Duration = Duration::from_secs(30);
 
 const MAX_TRACKED_GHOST_COMMITS: usize = 20;
 const GHOST_SNAPSHOT_NOTICE_THRESHOLD: Duration = Duration::from_secs(4);
@@ -1543,6 +1552,7 @@ pub(crate) struct ChatWidget<'a> {
     rate_limit_secondary_next_reset_at: Option<DateTime<Utc>>,
     rate_limit_refresh_scheduled_for: Option<DateTime<Utc>>,
     rate_limit_refresh_schedule_id: Arc<AtomicU64>,
+    header_hourly_limits_cache: RefCell<HeaderHourlyLimitsCache>,
     content_buffer: String,
     // Buffer for streaming assistant answer text; we do not surface partial
     // We wait for the final AgentMessage event and then emit the full text
@@ -6483,6 +6493,7 @@ impl ChatWidget<'_> {
             rate_limit_secondary_next_reset_at: None,
             rate_limit_refresh_scheduled_for: None,
             rate_limit_refresh_schedule_id: Arc::new(AtomicU64::new(0)),
+            header_hourly_limits_cache: RefCell::new(HeaderHourlyLimitsCache::default()),
             content_buffer: String::new(),
             last_assistant_message: None,
             last_answer_stream_id_in_turn: None,
@@ -6747,6 +6758,18 @@ impl ChatWidget<'_> {
             #[cfg(any(test, feature = "test-helpers"))]
             w.seed_test_mode_greeting();
         }
+
+        if !w.test_mode {
+            // On startup, trigger the same best-effort usage refresh used by the Limits
+            // settings overlay so the always-visible header has data for all accounts.
+            if !auth_accounts::list_accounts(&w.config.code_home)
+                .unwrap_or_default()
+                .is_empty()
+            {
+                w.request_latest_rate_limits(false);
+            }
+            w.refresh_limits_for_other_accounts_if_due();
+        }
         w.maybe_start_auto_upgrade_task();
         w
     }
@@ -6844,6 +6867,7 @@ impl ChatWidget<'_> {
             rate_limit_secondary_next_reset_at: None,
             rate_limit_refresh_scheduled_for: None,
             rate_limit_refresh_schedule_id: Arc::new(AtomicU64::new(0)),
+            header_hourly_limits_cache: RefCell::new(HeaderHourlyLimitsCache::default()),
             content_buffer: String::new(),
             last_assistant_message: None,
             last_answer_stream_id_in_turn: None,
@@ -29366,6 +29390,135 @@ Have we met every part of this goal and is there no further work to do?"#
         cache.value.clone()
     }
 
+    fn header_hourly_limits_line_content(&self) -> (String, Vec<Span<'static>>) {
+        if self.test_mode {
+            return (String::new(), Vec::new());
+        }
+
+        let now = Instant::now();
+        let mut cache = self.header_hourly_limits_cache.borrow_mut();
+        let needs_refresh = cache
+            .last_refresh
+            .map(|prev| now.duration_since(prev) >= HEADER_HOURLY_LIMITS_CACHE_TTL)
+            .unwrap_or(true);
+        if !needs_refresh {
+            return (cache.plain.clone(), cache.spans.clone());
+        }
+
+        cache.last_refresh = Some(now);
+
+        let dim_style = ratatui::style::Style::default().fg(crate::colors::text_dim());
+        let brand_style = ratatui::style::Style::default()
+            .fg(crate::colors::text())
+            .add_modifier(ratatui::style::Modifier::BOLD);
+        let accent_style = ratatui::style::Style::default()
+            .fg(crate::colors::info())
+            .add_modifier(ratatui::style::Modifier::BOLD);
+
+        let code_home = &self.config.code_home;
+        let active_id = auth_accounts::get_active_account_id(code_home)
+            .ok()
+            .flatten();
+        let accounts = auth_accounts::list_accounts(code_home).unwrap_or_default();
+        let usage_records = account_usage::list_rate_limit_snapshots(code_home).unwrap_or_default();
+        let snapshot_map: HashMap<String, account_usage::StoredRateLimitSnapshot> = usage_records
+            .into_iter()
+            .map(|record| (record.account_id.clone(), record))
+            .collect();
+        let now_ts = Utc::now();
+
+        let glyph_for_percent = |percent: f64| -> char {
+            let percent = percent.clamp(0.0, 100.0);
+            if percent <= 10.0 {
+                '○'
+            } else if percent <= 25.0 {
+                '◔'
+            } else if percent <= 50.0 {
+                '◑'
+            } else if percent <= 75.0 {
+                '◕'
+            } else {
+                '●'
+            }
+        };
+
+        let time_left_glyph = |reset_at: Option<DateTime<Utc>>| -> char {
+            let Some(reset_at) = reset_at else {
+                return '●';
+            };
+            let seconds_left = reset_at.signed_duration_since(now_ts).num_seconds();
+            let seconds_left = seconds_left.clamp(0, 5 * 60 * 60);
+            let percent_left = (seconds_left as f64 / (5.0 * 60.0 * 60.0)) * 100.0;
+            glyph_for_percent(percent_left)
+        };
+
+        let mut plain = String::new();
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        spans.push(Span::styled("Hourly: ".to_string(), dim_style));
+        plain.push_str("Hourly: ");
+
+        if accounts.is_empty() {
+            spans.push(Span::styled("—".to_string(), dim_style));
+            plain.push('—');
+            cache.plain = plain;
+            cache.spans = spans;
+            return (cache.plain.clone(), cache.spans.clone());
+        }
+
+        for (idx, account) in accounts.iter().enumerate() {
+            let record = snapshot_map.get(&account.id);
+            let is_active = active_id.as_deref() == Some(account.id.as_str());
+            let snapshot = if is_active {
+                self.rate_limit_snapshot
+                    .as_ref()
+                    .or_else(|| record.and_then(|record| record.snapshot.as_ref()))
+            } else {
+                record.and_then(|record| record.snapshot.as_ref())
+            };
+            let primary_next_reset_at = if is_active {
+                self.rate_limit_primary_next_reset_at
+                    .or_else(|| record.and_then(|record| record.primary_next_reset_at))
+            } else {
+                record.and_then(|record| record.primary_next_reset_at)
+            };
+            let secondary_next_reset_at = if is_active {
+                self.rate_limit_secondary_next_reset_at
+                    .or_else(|| record.and_then(|record| record.secondary_next_reset_at))
+            } else {
+                record.and_then(|record| record.secondary_next_reset_at)
+            };
+
+            let primary_used = snapshot.map(|s| s.primary_used_percent).unwrap_or(0.0);
+            let secondary_used = snapshot.map(|s| s.secondary_used_percent).unwrap_or(0.0);
+            let hourly_reached = primary_used >= 100.0;
+            let weekly_reached = secondary_used >= 100.0;
+
+            let (glyph, style) = if weekly_reached {
+                (time_left_glyph(secondary_next_reset_at), dim_style)
+            } else if hourly_reached {
+                (time_left_glyph(primary_next_reset_at), dim_style)
+            } else {
+                let style = if is_active {
+                    accent_style
+                } else {
+                    brand_style
+                };
+                (glyph_for_percent(primary_used), style)
+            };
+
+            spans.push(Span::styled(glyph.to_string(), style));
+            plain.push(glyph);
+            if idx + 1 < accounts.len() {
+                spans.push(Span::styled(" ".to_string(), dim_style));
+                plain.push(' ');
+            }
+        }
+
+        cache.plain = plain;
+        cache.spans = spans;
+        (cache.plain.clone(), cache.spans.clone())
+    }
+
     fn render_status_bar(&self, area: Rect, buf: &mut Buffer) {
         use crate::exec_command::relativize_to_home;
         use ratatui::layout::Margin;
@@ -29572,78 +29725,97 @@ Have we met every part of this goal and is there no further work to do?"#
         let status_line = Line::from(status_spans);
 
         let limits_line = {
-            let account_label = auth_accounts::get_active_account_id(&self.config.code_home)
-                .ok()
-                .flatten()
-                .and_then(|id| auth_accounts::find_account(&self.config.code_home, &id).ok())
-                .flatten()
-                .and_then(|account| {
-                    account
-                        .tokens
-                        .as_ref()
-                        .and_then(|tokens| tokens.id_token.email.clone())
-                        .filter(|email| !email.trim().is_empty())
-                        .or_else(|| Some(account_display_label(&account)))
-                })
-                .unwrap_or_else(|| "Not signed in".to_string());
-
-            let email_style = Style::default()
-                .fg(crate::colors::info())
-                .add_modifier(Modifier::BOLD);
-            let usage_style = Style::default()
-                .fg(crate::colors::function())
-                .add_modifier(Modifier::BOLD);
             let dim_style = Style::default().fg(crate::colors::text_dim());
 
-            let (plain, spans) = if let Some(snapshot) = &self.rate_limit_snapshot {
-                let hourly_used = snapshot.primary_used_percent.clamp(0.0, 100.0).round() as i64;
-                let weekly_used = snapshot.secondary_used_percent.clamp(0.0, 100.0).round() as i64;
-
-                let reset_duration = self
-                    .rate_limit_primary_next_reset_at
-                    .and_then(|reset_at| reset_at.signed_duration_since(Utc::now()).to_std().ok())
-                    .or_else(|| {
-                        snapshot
-                            .primary_reset_after_seconds
-                            .map(std::time::Duration::from_secs)
-                    });
-                let reset = reset_duration
-                    .map(|duration| format!(" [resets in {}]", format_duration(duration)))
-                    .unwrap_or_default();
-
-                let plain = format!("{account_label}: {hourly_used}%/{weekly_used}%{reset}");
-                let mut spans: Vec<Span<'static>> = Vec::new();
-                spans.push(Span::styled(account_label.clone(), email_style));
-                spans.push(Span::styled(": ".to_string(), dim_style));
-                spans.push(Span::styled(format!("{hourly_used}%/{weekly_used}%"), usage_style));
-                if !reset.is_empty() {
-                    spans.push(Span::styled(reset, dim_style));
+            if !self.test_mode {
+                let (plain, spans) = self.header_hourly_limits_line_content();
+                let span_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                if span_width <= inner_width {
+                    Line::from(spans)
+                } else {
+                    let display =
+                        crate::history_cell::truncate_with_ellipsis(plain.as_str(), inner_width);
+                    Line::styled(display.trim_end().to_string(), dim_style)
                 }
-                (plain, spans)
-            } else if self.rate_limit_fetch_inflight {
-                let plain = format!("{account_label}: refreshing usage...");
-                let spans = vec![
-                    Span::styled(account_label.clone(), email_style),
-                    Span::styled(": ".to_string(), dim_style),
-                    Span::styled("refreshing usage...".to_string(), dim_style),
-                ];
-                (plain, spans)
             } else {
-                let plain = format!("{account_label}: usage unavailable");
-                let spans = vec![
-                    Span::styled(account_label.clone(), email_style),
-                    Span::styled(": ".to_string(), dim_style),
-                    Span::styled("usage unavailable".to_string(), dim_style),
-                ];
-                (plain, spans)
-            };
+                let account_label = auth_accounts::get_active_account_id(&self.config.code_home)
+                    .ok()
+                    .flatten()
+                    .and_then(|id| auth_accounts::find_account(&self.config.code_home, &id).ok())
+                    .flatten()
+                    .and_then(|account| {
+                        account
+                            .tokens
+                            .as_ref()
+                            .and_then(|tokens| tokens.id_token.email.clone())
+                            .filter(|email| !email.trim().is_empty())
+                            .or_else(|| Some(account_display_label(&account)))
+                    })
+                    .unwrap_or_else(|| "Not signed in".to_string());
 
-            let span_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-            if span_width <= inner_width {
-                Line::from(spans)
-            } else {
-                let display = crate::history_cell::truncate_with_ellipsis(plain.as_str(), inner_width);
-                Line::styled(display.trim_end().to_string(), dim_style)
+                let email_style = Style::default()
+                    .fg(crate::colors::info())
+                    .add_modifier(Modifier::BOLD);
+                let usage_style = Style::default()
+                    .fg(crate::colors::function())
+                    .add_modifier(Modifier::BOLD);
+
+                let (plain, spans) = if let Some(snapshot) = &self.rate_limit_snapshot {
+                    let hourly_used =
+                        snapshot.primary_used_percent.clamp(0.0, 100.0).round() as i64;
+                    let weekly_used =
+                        snapshot.secondary_used_percent.clamp(0.0, 100.0).round() as i64;
+
+                    let reset_duration = self
+                        .rate_limit_primary_next_reset_at
+                        .and_then(|reset_at| reset_at.signed_duration_since(Utc::now()).to_std().ok())
+                        .or_else(|| {
+                            snapshot
+                                .primary_reset_after_seconds
+                                .map(std::time::Duration::from_secs)
+                        });
+                    let reset = reset_duration
+                        .map(|duration| format!(" [resets in {}]", format_duration(duration)))
+                        .unwrap_or_default();
+
+                    let plain = format!("{account_label}: {hourly_used}%/{weekly_used}%{reset}");
+                    let mut spans: Vec<Span<'static>> = Vec::new();
+                    spans.push(Span::styled(account_label.clone(), email_style));
+                    spans.push(Span::styled(": ".to_string(), dim_style));
+                    spans.push(Span::styled(
+                        format!("{hourly_used}%/{weekly_used}%"),
+                        usage_style,
+                    ));
+                    if !reset.is_empty() {
+                        spans.push(Span::styled(reset, dim_style));
+                    }
+                    (plain, spans)
+                } else if self.rate_limit_fetch_inflight {
+                    let plain = format!("{account_label}: refreshing usage...");
+                    let spans = vec![
+                        Span::styled(account_label.clone(), email_style),
+                        Span::styled(": ".to_string(), dim_style),
+                        Span::styled("refreshing usage...".to_string(), dim_style),
+                    ];
+                    (plain, spans)
+                } else {
+                    let plain = format!("{account_label}: usage unavailable");
+                    let spans = vec![
+                        Span::styled(account_label.clone(), email_style),
+                        Span::styled(": ".to_string(), dim_style),
+                        Span::styled("usage unavailable".to_string(), dim_style),
+                    ];
+                    (plain, spans)
+                };
+
+                let span_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                if span_width <= inner_width {
+                    Line::from(spans)
+                } else {
+                    let display =
+                        crate::history_cell::truncate_with_ellipsis(plain.as_str(), inner_width);
+                    Line::styled(display.trim_end().to_string(), dim_style)
+                }
             }
         };
 
