@@ -1,15 +1,36 @@
 use chrono::{DateTime, Utc};
 use code_app_server_protocol::AuthMode;
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
+use crate::account_usage;
 use crate::token_data::TokenData;
 
 const ACCOUNTS_FILE_NAME: &str = "auth_accounts.json";
+
+fn session_account_override_lock() -> &'static RwLock<Option<String>> {
+    static OVERRIDE: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+    OVERRIDE.get_or_init(|| RwLock::new(None))
+}
+
+pub fn set_session_account_override(account_id: Option<String>) {
+    if let Ok(mut guard) = session_account_override_lock().write() {
+        *guard = account_id;
+    }
+}
+
+pub fn session_account_override() -> Option<String> {
+    session_account_override_lock()
+        .read()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StoredAccount {
@@ -65,11 +86,41 @@ fn accounts_file_path(code_home: &Path) -> PathBuf {
     code_home.join(ACCOUNTS_FILE_NAME)
 }
 
+fn accounts_lock_path(code_home: &Path) -> PathBuf {
+    code_home.join("auth_accounts.lock")
+}
+
+fn with_accounts_lock<T>(code_home: &Path, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    let lock_path = accounts_lock_path(code_home);
+    if let Some(parent) = lock_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    let lock_file = options.open(&lock_path)?;
+    lock_file.lock_exclusive()?;
+    let result = f();
+    let _ = lock_file.unlock();
+    result
+}
+
 fn read_accounts_file(path: &Path) -> io::Result<AccountsFile> {
     match File::open(path) {
         Ok(mut file) => {
             let mut contents = String::new();
             file.read_to_string(&mut contents)?;
+            if contents.trim().is_empty() {
+                return Ok(AccountsFile::default());
+            }
             let parsed: AccountsFile = serde_json::from_str(&contents)?;
             Ok(parsed)
         }
@@ -86,16 +137,24 @@ fn write_accounts_file(path: &Path, data: &AccountsFile) -> io::Result<()> {
     }
 
     let json = serde_json::to_string_pretty(data)?;
-    let mut options = OpenOptions::new();
-    options.truncate(true).write(true).create(true);
-    #[cfg(unix)]
+
+    let tmp_path = path.with_extension("json.tmp");
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut tmp = options.open(&tmp_path)?;
+        tmp.write_all(json.as_bytes())?;
+        tmp.sync_all()?;
     }
-    let mut file = options.open(path)?;
-    file.write_all(json.as_bytes())?;
-    file.flush()?;
+    if let Err(err) = std::fs::rename(&tmp_path, path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -216,49 +275,96 @@ pub fn find_account(code_home: &Path, account_id: &str) -> io::Result<Option<Sto
         .find(|acc| acc.id == account_id))
 }
 
+/// Resolve a stored account id suitable for account rotation and local usage
+/// persistence.
+///
+/// Stored account ids are internal UUIDs, while ChatGPT auth tokens expose a
+/// provider account id. This helper bridges that gap.
+pub fn resolve_stored_account_id(
+    code_home: &Path,
+    token_account_id: Option<&str>,
+) -> io::Result<Option<String>> {
+    let path = accounts_file_path(code_home);
+    let data = read_accounts_file(&path)?;
+
+    if let Some(token_account_id) = token_account_id {
+        if let Some(account) = data.accounts.iter().find(|account| {
+            account.mode.is_chatgpt()
+                && account
+                    .tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.account_id.as_deref())
+                    .is_some_and(|stored_token_id| stored_token_id == token_account_id)
+        }) {
+            return Ok(Some(account.id.clone()));
+        }
+    }
+
+    if let Some(active_id) = data.active_account_id
+        && data.accounts.iter().any(|account| account.id == active_id)
+    {
+        return Ok(Some(active_id));
+    }
+
+    Ok(None)
+}
+
 pub fn set_active_account_id(
     code_home: &Path,
     account_id: Option<String>,
 ) -> io::Result<Option<StoredAccount>> {
-    let path = accounts_file_path(code_home);
-    let mut data = read_accounts_file(&path)?;
+    with_accounts_lock(code_home, || {
+        let path = accounts_file_path(code_home);
+        let mut data = read_accounts_file(&path)?;
 
-    data.active_account_id = account_id.clone();
+        data.active_account_id = account_id.clone();
 
-    if let Some(id) = account_id {
-        if let Some(account) = data.accounts.iter_mut().find(|acc| acc.id == id) {
-            touch_account(account, true);
-            let updated = account.clone();
+        if let Some(id) = account_id {
+            if let Some(account) = data.accounts.iter_mut().find(|acc| acc.id == id) {
+                touch_account(account, true);
+                let updated = account.clone();
+                write_accounts_file(&path, &data)?;
+                return Ok(Some(updated));
+            }
             write_accounts_file(&path, &data)?;
-            return Ok(Some(updated));
+            Ok(None)
+        } else {
+            write_accounts_file(&path, &data)?;
+            Ok(None)
         }
-        write_accounts_file(&path, &data)?;
-        Ok(None)
-    } else {
-        write_accounts_file(&path, &data)?;
-        Ok(None)
-    }
+    })
 }
 
 pub fn remove_account(code_home: &Path, account_id: &str) -> io::Result<Option<StoredAccount>> {
-    let path = accounts_file_path(code_home);
-    let mut data = read_accounts_file(&path)?;
+    let removed = with_accounts_lock(code_home, || {
+        let path = accounts_file_path(code_home);
+        let mut data = read_accounts_file(&path)?;
 
-    let removed = if let Some(pos) = data.accounts.iter().position(|acc| acc.id == account_id) {
-        Some(data.accounts.remove(pos))
-    } else {
-        None
-    };
+        let removed =
+            if let Some(pos) = data.accounts.iter().position(|acc| acc.id == account_id) {
+                Some(data.accounts.remove(pos))
+            } else {
+                None
+            };
 
-    if data
-        .active_account_id
-        .as_ref()
-        .is_some_and(|active| active == account_id)
+        if data
+            .active_account_id
+            .as_ref()
+            .is_some_and(|active| active == account_id)
+        {
+            data.active_account_id = None;
+        }
+
+        write_accounts_file(&path, &data)?;
+        Ok(removed)
+    })?;
+
+    if removed.is_some()
+        && session_account_override().as_deref() == Some(account_id)
     {
-        data.active_account_id = None;
+        set_session_account_override(None);
     }
 
-    write_accounts_file(&path, &data)?;
     Ok(removed)
 }
 
@@ -268,35 +374,45 @@ pub fn upsert_api_key_account(
     label: Option<String>,
     make_active: bool,
 ) -> io::Result<StoredAccount> {
-    let path = accounts_file_path(code_home);
-    let data = read_accounts_file(&path)?;
+    let stored = with_accounts_lock(code_home, || {
+        let path = accounts_file_path(code_home);
+        let data = read_accounts_file(&path)?;
 
-    let new_account = StoredAccount {
-        id: next_id(),
-        mode: AuthMode::ApiKey,
-        label,
-        openai_api_key: Some(api_key),
-        tokens: None,
-        last_refresh: None,
-        created_at: None,
-        last_used_at: None,
-    };
+        let new_account = StoredAccount {
+            id: next_id(),
+            mode: AuthMode::ApiKey,
+            label,
+            openai_api_key: Some(api_key),
+            tokens: None,
+            last_refresh: None,
+            created_at: None,
+            last_used_at: None,
+        };
 
-    let (mut data, mut stored) = upsert_account(data, new_account);
+        let (mut data, mut stored) = upsert_account(data, new_account);
 
-    if make_active {
-        data.active_account_id = Some(stored.id.clone());
-        if let Some(account) = data
-            .accounts
-            .iter_mut()
-            .find(|acc| acc.id == stored.id)
-        {
-            touch_account(account, true);
-            stored = account.clone();
+        if make_active {
+            data.active_account_id = Some(stored.id.clone());
+            if let Some(account) = data
+                .accounts
+                .iter_mut()
+                .find(|acc| acc.id == stored.id)
+            {
+                touch_account(account, true);
+                stored = account.clone();
+            }
         }
-    }
 
-    write_accounts_file(&path, &data)?;
+        write_accounts_file(&path, &data)?;
+        Ok(stored)
+    })?;
+
+    let observed_at = now();
+    if let Err(err) =
+        account_usage::clear_auth_invalid_hint(code_home, &stored.id, None, observed_at)
+    {
+        tracing::warn!("Failed to clear auth invalid hint: {err}");
+    }
     Ok(stored)
 }
 
@@ -307,35 +423,52 @@ pub fn upsert_chatgpt_account(
     label: Option<String>,
     make_active: bool,
 ) -> io::Result<StoredAccount> {
-    let path = accounts_file_path(code_home);
-    let data = read_accounts_file(&path)?;
+    let plan = tokens
+        .id_token
+        .get_chatgpt_plan_type()
+        .map(|plan| plan.to_string());
+    let stored = with_accounts_lock(code_home, || {
+        let path = accounts_file_path(code_home);
+        let data = read_accounts_file(&path)?;
 
-    let new_account = StoredAccount {
-        id: next_id(),
-        mode: AuthMode::ChatGPT,
-        label,
-        openai_api_key: None,
-        tokens: Some(tokens),
-        last_refresh: Some(last_refresh),
-        created_at: None,
-        last_used_at: None,
-    };
+        let new_account = StoredAccount {
+            id: next_id(),
+            mode: AuthMode::ChatGPT,
+            label,
+            openai_api_key: None,
+            tokens: Some(tokens),
+            last_refresh: Some(last_refresh),
+            created_at: None,
+            last_used_at: None,
+        };
 
-    let (mut data, mut stored) = upsert_account(data, new_account);
+        let (mut data, mut stored) = upsert_account(data, new_account);
 
-    if make_active {
-        data.active_account_id = Some(stored.id.clone());
-        if let Some(account) = data
-            .accounts
-            .iter_mut()
-            .find(|acc| acc.id == stored.id)
-        {
-            touch_account(account, true);
-            stored = account.clone();
+        if make_active {
+            data.active_account_id = Some(stored.id.clone());
+            if let Some(account) = data
+                .accounts
+                .iter_mut()
+                .find(|acc| acc.id == stored.id)
+            {
+                touch_account(account, true);
+                stored = account.clone();
+            }
         }
-    }
 
-    write_accounts_file(&path, &data)?;
+        write_accounts_file(&path, &data)?;
+        Ok(stored)
+    })?;
+
+    let observed_at = now();
+    if let Err(err) = account_usage::clear_auth_invalid_hint(
+        code_home,
+        &stored.id,
+        plan.as_deref(),
+        observed_at,
+    ) {
+        tracing::warn!("Failed to clear auth invalid hint: {err}");
+    }
     Ok(stored)
 }
 
@@ -489,5 +622,125 @@ mod tests {
 
         let active_after = get_active_account_id(home.path()).expect("active id");
         assert!(active_after.is_none());
+    }
+
+    #[test]
+    fn remove_account_clears_session_override() {
+        let home = tempdir().expect("tempdir");
+        let stored = upsert_api_key_account(
+            home.path(),
+            "sk-test".to_string(),
+            None,
+            true,
+        )
+        .expect("insert account");
+
+        set_session_account_override(Some(stored.id.clone()));
+        assert_eq!(
+            session_account_override().as_deref(),
+            Some(stored.id.as_str())
+        );
+
+        let removed = remove_account(home.path(), &stored.id).expect("remove account");
+        assert!(removed.is_some());
+        assert!(session_account_override().is_none());
+    }
+
+    #[test]
+    fn resolve_stored_account_id_prefers_chatgpt_token_account_id() {
+        let home = tempdir().expect("tempdir");
+        let first = upsert_chatgpt_account(
+            home.path(),
+            make_chatgpt_tokens(Some("acct-first"), Some("first@example.com")),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert first");
+        let second = upsert_chatgpt_account(
+            home.path(),
+            make_chatgpt_tokens(Some("acct-second"), Some("second@example.com")),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert second");
+
+        let resolved = resolve_stored_account_id(home.path(), Some("acct-first"))
+            .expect("resolve account id");
+
+        assert_eq!(resolved.as_deref(), Some(first.id.as_str()));
+        assert_ne!(resolved.as_deref(), Some(second.id.as_str()));
+    }
+
+    #[test]
+    fn resolve_stored_account_id_falls_back_to_active_account_id() {
+        let home = tempdir().expect("tempdir");
+        let stored = upsert_chatgpt_account(
+            home.path(),
+            make_chatgpt_tokens(Some("acct-active"), Some("active@example.com")),
+            Utc::now(),
+            None,
+            true,
+        )
+        .expect("insert account");
+
+        let resolved = resolve_stored_account_id(home.path(), None)
+            .expect("resolve account id");
+
+        assert_eq!(resolved.as_deref(), Some(stored.id.as_str()));
+    }
+
+    #[test]
+    fn resolve_stored_account_id_resolves_chatgpt_token_account_without_active() {
+        let home = tempdir().expect("tempdir");
+        let stored = upsert_chatgpt_account(
+            home.path(),
+            make_chatgpt_tokens(Some("acct-target"), Some("target@example.com")),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert account");
+        set_active_account_id(home.path(), None).expect("clear active");
+
+        let resolved = resolve_stored_account_id(home.path(), Some("acct-target"))
+            .expect("resolve account id");
+
+        assert_eq!(resolved.as_deref(), Some(stored.id.as_str()));
+    }
+
+    #[test]
+    fn resolve_stored_account_id_returns_none_for_unknown_chatgpt_token_account() {
+        let home = tempdir().expect("tempdir");
+        upsert_chatgpt_account(
+            home.path(),
+            make_chatgpt_tokens(Some("acct-known"), Some("known@example.com")),
+            Utc::now(),
+            None,
+            false,
+        )
+        .expect("insert account");
+        set_active_account_id(home.path(), None).expect("clear active");
+
+        let resolved = resolve_stored_account_id(home.path(), Some("acct-missing"))
+            .expect("resolve account id");
+
+        assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn session_account_override_round_trips() {
+        set_session_account_override(None);
+        assert!(session_account_override().is_none());
+
+        set_session_account_override(Some("account-123".to_string()));
+        assert_eq!(
+            session_account_override().as_deref(),
+            Some("account-123")
+        );
+
+        set_session_account_override(None);
+        assert!(session_account_override().is_none());
     }
 }

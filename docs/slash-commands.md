@@ -21,6 +21,8 @@ Notes
 - `/quit`: exit Code.
 - `/logout`: log out of Code.
 - `/login`: manage Code sign-ins (select, add, or disconnect accounts).
+  Account selections made here stay pinned for the rest of the current app
+  session.
 - `/settings [section]`: open the settings panel. Optional section argument
   jumps directly to `model`, `theme`, `agents`, `skills`, `auto`, `review`,
   `validation`, `limits`, `chrome`, `mcp`, or `notifications`.
@@ -63,8 +65,9 @@ Notes
 - `/prompts`: manage custom prompts.
 - `/skills`: manage skills.
 - `/status`: show current session configuration and token usage.
-- `/limits`: adjust session limits and visualize hourly and weekly rate-limit
-  usage.
+- `/limits [refresh|refresh-all]`: adjust session limits and visualize hourly
+  and weekly rate-limit usage. Use `refresh` to force a re-check for the active
+  account, or `refresh-all` to refresh every connected account.
 - `/update`: check the installed version, detect available upgrades, and open a
   guided upgrade terminal that runs the installer interactively when possible.
 - `/notifications [status|on|off]`: manage notification settings. Without

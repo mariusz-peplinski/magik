@@ -69,10 +69,25 @@ impl HistoryCell for AnimatedWelcomeCell {
     }
 
     fn display_lines(&self) -> Vec<Line<'static>> {
+        let heart = Span::styled(
+            "<3",
+            Style::default()
+                .fg(ratatui::style::Color::Rgb(255, 20, 147))
+                .add_modifier(Modifier::BOLD),
+        );
         vec![
             Line::from(""),
-            Line::from("Welcome to magik"),
-            Line::from(crate::greeting::greeting_placeholder()),
+            Line::from(Span::styled(
+                format!("Magik Code {}", self.version_label),
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Line::from(vec![
+                Span::styled(
+                    "by @mariusz-peplinski ",
+                    Style::default().fg(crate::colors::text_dim()),
+                ),
+                heart,
+            ]),
             Line::from(""),
         ]
     }
@@ -95,6 +110,9 @@ impl HistoryCell for AnimatedWelcomeCell {
         if self.hidden.get() {
             return;
         }
+
+        let heart_color = ratatui::style::Color::Rgb(255, 20, 147);
+        let title = format!("Magik Code {}", self.version_label);
 
         // Clear the full allocated area first so repositioning the art (e.g.,
         // bottom-aligning when there's vertical slack) doesn't leave stale
@@ -169,6 +187,24 @@ impl HistoryCell for AnimatedWelcomeCell {
                     &self.version_label,
                     row_offset,
                 );
+
+                let mut title_style = Style::default().fg(crate::colors::text_bright());
+                let mut by_style = Style::default().fg(crate::colors::text_dim());
+                if alpha < 0.8 {
+                    title_style = title_style.add_modifier(Modifier::DIM);
+                    by_style = by_style.add_modifier(Modifier::DIM);
+                }
+
+                self.render_welcome_text(
+                    area,
+                    buf,
+                    skip_rows,
+                    art_bottom,
+                    &title,
+                    title_style,
+                    by_style,
+                    heart_color,
+                );
             } else {
                 self.faded_out.set(true);
             }
@@ -195,6 +231,17 @@ impl HistoryCell for AnimatedWelcomeCell {
             variant_for_render,
             &self.version_label,
             row_offset,
+        );
+
+        self.render_welcome_text(
+            area,
+            buf,
+            skip_rows,
+            art_bottom,
+            &title,
+            Style::default().fg(crate::colors::text_bright()),
+            Style::default().fg(crate::colors::text_dim()),
+            heart_color,
         );
     }
 
@@ -225,6 +272,69 @@ impl HistoryCell for AnimatedWelcomeCell {
 
     fn should_remove(&self) -> bool {
         AnimatedWelcomeCell::should_remove(self)
+    }
+}
+
+impl AnimatedWelcomeCell {
+    fn render_welcome_text(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        skip_rows: u16,
+        art_bottom: u16,
+        title: &str,
+        title_style: Style,
+        by_style: Style,
+        heart_color: ratatui::style::Color,
+    ) {
+        let title_line = Line::from(Span::styled(
+            title.to_string(),
+            title_style.add_modifier(Modifier::BOLD),
+        ));
+        let by_line = Line::from(vec![
+            Span::styled("by @mariusz-peplinski ", by_style),
+            Span::styled(
+                "<3",
+                Style::default()
+                    .fg(heart_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]);
+
+        self.render_centered_line(area, buf, skip_rows, art_bottom, title_line);
+        self.render_centered_line(area, buf, skip_rows, art_bottom.saturating_add(1), by_line);
+    }
+
+    fn render_centered_line(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        skip_rows: u16,
+        target_row: u16,
+        line: Line<'static>,
+    ) {
+        if target_row < skip_rows {
+            return;
+        }
+        let local_y = target_row.saturating_sub(skip_rows);
+        if local_y >= area.height {
+            return;
+        }
+
+        let text_width: u16 = line
+            .spans
+            .iter()
+            .map(|span| span.content.chars().count() as u16)
+            .sum();
+        let x_offset = area.width.saturating_sub(text_width) / 2;
+
+        let line_area = Rect {
+            x: area.x.saturating_add(x_offset),
+            y: area.y.saturating_add(local_y),
+            width: area.width.saturating_sub(x_offset),
+            height: 1,
+        };
+        line.render(line_area, buf);
     }
 }
 

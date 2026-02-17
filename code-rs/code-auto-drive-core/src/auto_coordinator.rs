@@ -2552,14 +2552,15 @@ fn classify_model_error_with_auto_switch(
             {
                 if let Some(auth_manager) = client.get_auth_manager() {
                     let auth = auth_manager.auth();
-                    let current_account_id = auth
+                    let token_account_id = auth
                         .as_ref()
-                        .and_then(|current| current.get_account_id())
-                        .or_else(|| {
-                            auth_accounts::get_active_account_id(client.code_home())
-                                .ok()
-                                .flatten()
-                        });
+                        .and_then(|current| current.get_account_id());
+                    let current_account_id = auth_accounts::resolve_stored_account_id(
+                        client.code_home(),
+                        token_account_id.as_deref(),
+                    )
+                    .ok()
+                    .flatten();
                     if let Some(current_account_id) = current_account_id {
                         let now = Utc::now();
                         let blocked_until = limit

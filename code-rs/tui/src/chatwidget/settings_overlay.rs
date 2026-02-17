@@ -1057,7 +1057,11 @@ impl LimitsSettingsContent {
             Span::styled("PgUp/PgDn", accent_style),
             Span::styled(" page  ", hint_style),
             Span::styled("◂ ▸", accent_style),
-            Span::styled(" change tab", hint_style),
+            Span::styled(" change tab  ", hint_style),
+            Span::styled("r", accent_style),
+            Span::styled(" refresh  ", hint_style),
+            Span::styled("R", accent_style),
+            Span::styled(" refresh all", hint_style),
         ]);
 
         Paragraph::new(line)

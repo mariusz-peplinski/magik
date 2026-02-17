@@ -42,6 +42,10 @@ use super::state::{
 impl App<'_> {
     fn handle_login_mode_change(&mut self, using_chatgpt_auth: bool) {
         self.config.using_chatgpt_auth = using_chatgpt_auth;
+        let session_override = code_core::auth_accounts::get_active_account_id(&self.config.code_home)
+            .ok()
+            .flatten();
+        code_core::auth_accounts::set_session_account_override(session_override);
         if let AppState::Chat { widget } = &mut self.app_state {
             widget.set_using_chatgpt_auth(using_chatgpt_auth);
             let _ = widget.reload_auth();

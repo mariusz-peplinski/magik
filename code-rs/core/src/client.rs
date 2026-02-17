@@ -1030,19 +1030,21 @@ impl ModelClient {
                 crate::config_types::AccountSwitchingMode::Manual
                     | crate::config_types::AccountSwitchingMode::OnLimit
             )
+            && auth_accounts::session_account_override().is_none()
             && auth_manager.is_some()
             && auth::read_code_api_key_from_env().is_none()
         {
             let now = Utc::now();
             let auth = auth_manager.as_ref().and_then(|m| m.auth());
-            let current_account_id = auth
+            let token_account_id = auth
                 .as_ref()
-                .and_then(|current| current.get_account_id())
-                .or_else(|| {
-                    auth_accounts::get_active_account_id(self.code_home())
-                        .ok()
-                        .flatten()
-                });
+                .and_then(|current| current.get_account_id());
+            let current_account_id = auth_accounts::resolve_stored_account_id(
+                self.code_home(),
+                token_account_id.as_deref(),
+            )
+            .ok()
+            .flatten();
 
             if let Ok(Some(next_account_id)) = crate::account_switching::select_preferred_account_id(
                 self.code_home(),
@@ -1390,19 +1392,21 @@ impl ModelClient {
 
                     if status == StatusCode::TOO_MANY_REQUESTS
                         && self.config.auto_switch_accounts_on_rate_limit
+                        && auth_accounts::session_account_override().is_none()
                         && auth_manager.is_some()
                         && auth::read_code_api_key_from_env().is_none()
                         && self.config.account_switching_mode
                             != crate::config_types::AccountSwitchingMode::Manual
                     {
-                        let current_account_id = auth
+                        let token_account_id = auth
                             .as_ref()
-                            .and_then(|current| current.get_account_id())
-                            .or_else(|| {
-                                auth_accounts::get_active_account_id(self.code_home())
-                                    .ok()
-                                    .flatten()
-                            });
+                            .and_then(|current| current.get_account_id());
+                        let current_account_id = auth_accounts::resolve_stored_account_id(
+                            self.code_home(),
+                            token_account_id.as_deref(),
+                        )
+                        .ok()
+                        .flatten();
                         if let Some(current_account_id) = current_account_id {
                             let mut retry_after_delay = retry_after_hint.clone();
                             if retry_after_delay.is_none() {
@@ -1520,17 +1524,22 @@ impl ModelClient {
 
                     if status == StatusCode::UNAUTHORIZED
                         && self.config.auto_switch_accounts_on_rate_limit
+                        && auth_accounts::session_account_override().is_none()
                         && auth_manager.is_some()
                         && auth::read_code_api_key_from_env().is_none()
                         && self.config.account_switching_mode
                             != crate::config_types::AccountSwitchingMode::Manual
                     {
-                        let current_account_id = auth.as_ref().and_then(|current| {
-                            if !current.mode.is_chatgpt() {
-                                return None;
-                            }
-                            current.get_account_id().map(|id| id.to_string())
-                        });
+                        let token_account_id = auth
+                            .as_ref()
+                            .and_then(|current| current.mode.is_chatgpt().then_some(current))
+                            .and_then(|current| current.get_account_id());
+                        let current_account_id = auth_accounts::resolve_stored_account_id(
+                            self.code_home(),
+                            token_account_id.as_deref(),
+                        )
+                        .ok()
+                        .flatten();
                         if let Some(current_account_id) = current_account_id {
                             let plan_type = auth
                                 .as_ref()
@@ -1761,12 +1770,16 @@ impl ModelClient {
                         }
 
                         if status == StatusCode::UNAUTHORIZED {
-                            let current_account_id = auth.as_ref().and_then(|current| {
-                                if !current.mode.is_chatgpt() {
-                                    return None;
-                                }
-                                current.get_account_id().map(|id| id.to_string())
-                            });
+                            let token_account_id = auth
+                                .as_ref()
+                                .and_then(|current| current.mode.is_chatgpt().then_some(current))
+                                .and_then(|current| current.get_account_id());
+                            let current_account_id = auth_accounts::resolve_stored_account_id(
+                                self.code_home(),
+                                token_account_id.as_deref(),
+                            )
+                            .ok()
+                            .flatten();
                             if let Some(current_account_id) = current_account_id {
                                 let plan_type = auth
                                     .as_ref()
@@ -1981,12 +1994,16 @@ impl ModelClient {
             }
 
             if status == StatusCode::UNAUTHORIZED {
-                let current_account_id = auth.as_ref().and_then(|current| {
-                    if !current.mode.is_chatgpt() {
-                        return None;
-                    }
-                    current.get_account_id().map(|id| id.to_string())
-                });
+                let token_account_id = auth
+                    .as_ref()
+                    .and_then(|current| current.mode.is_chatgpt().then_some(current))
+                    .and_then(|current| current.get_account_id());
+                let current_account_id = auth_accounts::resolve_stored_account_id(
+                    self.code_home(),
+                    token_account_id.as_deref(),
+                )
+                .ok()
+                .flatten();
                 if let Some(current_account_id) = current_account_id {
                     let plan_type = auth
                         .as_ref()
@@ -2010,20 +2027,22 @@ impl ModelClient {
 
             if status == StatusCode::TOO_MANY_REQUESTS
                 && self.config.auto_switch_accounts_on_rate_limit
+                && auth_accounts::session_account_override().is_none()
                 && auth_manager.is_some()
                 && auth::read_code_api_key_from_env().is_none()
                 && self.config.account_switching_mode
                     != crate::config_types::AccountSwitchingMode::Manual
             {
                 let now = Utc::now();
-                let current_account_id = auth
+                let token_account_id = auth
                     .as_ref()
-                    .and_then(|current| current.get_account_id())
-                    .or_else(|| {
-                        auth_accounts::get_active_account_id(self.code_home())
-                            .ok()
-                            .flatten()
-                    });
+                    .and_then(|current| current.get_account_id());
+                let current_account_id = auth_accounts::resolve_stored_account_id(
+                    self.code_home(),
+                    token_account_id.as_deref(),
+                )
+                .ok()
+                .flatten();
                 if let Some(current_account_id) = current_account_id {
                     let current_auth_mode = auth
                         .as_ref()
@@ -2068,18 +2087,23 @@ impl ModelClient {
 
             if status == StatusCode::UNAUTHORIZED
                 && self.config.auto_switch_accounts_on_rate_limit
+                && auth_accounts::session_account_override().is_none()
                 && auth_manager.is_some()
                 && auth::read_code_api_key_from_env().is_none()
                 && self.config.account_switching_mode
                     != crate::config_types::AccountSwitchingMode::Manual
             {
                 let now = Utc::now();
-                let current_account_id = auth.as_ref().and_then(|current| {
-                    if !current.mode.is_chatgpt() {
-                        return None;
-                    }
-                    current.get_account_id().map(|id| id.to_string())
-                });
+                let token_account_id = auth
+                    .as_ref()
+                    .and_then(|current| current.mode.is_chatgpt().then_some(current))
+                    .and_then(|current| current.get_account_id());
+                let current_account_id = auth_accounts::resolve_stored_account_id(
+                    self.code_home(),
+                    token_account_id.as_deref(),
+                )
+                .ok()
+                .flatten();
                 if let Some(current_account_id) = current_account_id {
                     let current_auth_mode = auth
                         .as_ref()
@@ -2138,12 +2162,16 @@ impl ModelClient {
 
             if !status.is_success() {
                 if status == StatusCode::UNAUTHORIZED {
-                    let current_account_id = auth.as_ref().and_then(|current| {
-                        if !current.mode.is_chatgpt() {
-                            return None;
-                        }
-                        current.get_account_id().map(|id| id.to_string())
-                    });
+                    let token_account_id = auth
+                        .as_ref()
+                        .and_then(|current| current.mode.is_chatgpt().then_some(current))
+                        .and_then(|current| current.get_account_id());
+                    let current_account_id = auth_accounts::resolve_stored_account_id(
+                        self.code_home(),
+                        token_account_id.as_deref(),
+                    )
+                    .ok()
+                    .flatten();
                     if let Some(current_account_id) = current_account_id {
                         let plan_type = auth
                             .as_ref()

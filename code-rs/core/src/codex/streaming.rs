@@ -2097,18 +2097,20 @@ async fn run_turn(
 
                 let mut switched = false;
                 if sess.client.auto_switch_accounts_on_rate_limit()
+                    && auth_accounts::session_account_override().is_none()
                     && auth::read_code_api_key_from_env().is_none()
                 {
                     if let Some(auth_manager) = sess.client.get_auth_manager() {
                         let auth = auth_manager.auth();
-                        let current_account_id = auth
+                        let token_account_id = auth
                             .as_ref()
-                            .and_then(|current| current.get_account_id())
-                            .or_else(|| {
-                                auth_accounts::get_active_account_id(sess.client.code_home())
-                                    .ok()
-                                    .flatten()
-                            });
+                            .and_then(|current| current.get_account_id());
+                        let current_account_id = auth_accounts::resolve_stored_account_id(
+                            sess.client.code_home(),
+                            token_account_id.as_deref(),
+                        )
+                        .ok()
+                        .flatten();
                         if let Some(current_account_id) = current_account_id {
                             let now = Utc::now();
                             let blocked_until = limit_err.resets_in_seconds.map(|seconds| {

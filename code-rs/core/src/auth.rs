@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use chrono::Utc;
+use fs2::FileExt;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -356,18 +357,47 @@ pub fn get_auth_file(code_home: &Path) -> PathBuf {
     code_home.join("auth.json")
 }
 
+fn auth_lock_path(code_home: &Path) -> PathBuf {
+    code_home.join("auth.lock")
+}
+
+fn with_auth_lock<T>(code_home: &Path, f: impl FnOnce() -> std::io::Result<T>) -> std::io::Result<T> {
+    let lock_path = auth_lock_path(code_home);
+    if let Some(parent) = lock_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true);
+    #[cfg(unix)]
+    {
+        options.mode(0o600);
+    }
+
+    let lock_file = options.open(&lock_path)?;
+    lock_file.lock_exclusive()?;
+    let result = f();
+    let _ = lock_file.unlock();
+    result
+}
+
 /// Delete the auth.json file inside `code_home` if it exists. Returns `Ok(true)`
 /// if a file was removed, `Ok(false)` if no auth file was present.
 pub fn logout(code_home: &Path) -> std::io::Result<bool> {
     let auth_file = get_auth_file(code_home);
-    let removed = match std::fs::remove_file(&auth_file) {
-        Ok(_) => true,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
-        Err(err) => return Err(err),
-    };
+    with_auth_lock(code_home, || {
+        let removed = match std::fs::remove_file(&auth_file) {
+            Ok(_) => true,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+            Err(err) => return Err(err),
+        };
 
-    let _ = crate::auth_accounts::set_active_account_id(code_home, None)?;
-    Ok(removed)
+        let _ = crate::auth_accounts::set_active_account_id(code_home, None)?;
+        crate::auth_accounts::set_session_account_override(None);
+        Ok(removed)
+    })
 }
 
 /// Writes an `auth.json` that contains only the API key. Intended for CLI use.
@@ -649,16 +679,30 @@ pub fn try_read_auth_json(auth_file: &Path) -> std::io::Result<AuthDotJson> {
 }
 
 pub fn write_auth_json(auth_file: &Path, auth_dot_json: &AuthDotJson) -> std::io::Result<()> {
+    let code_home = auth_file
+        .parent()
+        .ok_or_else(|| std::io::Error::other("auth file has no parent directory"))?;
+    with_auth_lock(code_home, || write_auth_json_unlocked(auth_file, auth_dot_json))
+}
+
+fn write_auth_json_unlocked(auth_file: &Path, auth_dot_json: &AuthDotJson) -> std::io::Result<()> {
     let json_data = serde_json::to_string_pretty(auth_dot_json)?;
-    let mut options = OpenOptions::new();
-    options.truncate(true).write(true).create(true);
-    #[cfg(unix)]
+    let tmp_path = auth_file.with_extension("json.tmp");
     {
-        options.mode(0o600);
+        let mut options = OpenOptions::new();
+        options.truncate(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            options.mode(0o600);
+        }
+        let mut file = options.open(&tmp_path)?;
+        file.write_all(json_data.as_bytes())?;
+        file.sync_all()?;
     }
-    let mut file = options.open(auth_file)?;
-    file.write_all(json_data.as_bytes())?;
-    file.flush()?;
+    if let Err(err) = std::fs::rename(&tmp_path, auth_file) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -668,33 +712,41 @@ async fn update_tokens(
     access_token: Option<String>,
     refresh_token: Option<String>,
 ) -> std::io::Result<AuthDotJson> {
-    let mut auth_dot_json = try_read_auth_json(auth_file)?;
+    let code_home = auth_file
+        .parent()
+        .ok_or_else(|| std::io::Error::other("auth file has no parent directory"))?;
 
-    let tokens = auth_dot_json.tokens.get_or_insert_with(TokenData::default);
-    tokens.id_token = parse_id_token(&id_token).map_err(std::io::Error::other)?;
-    if let Some(access_token) = access_token {
-        tokens.access_token = access_token.to_string();
-    }
-    if let Some(refresh_token) = refresh_token {
-        tokens.refresh_token = refresh_token.to_string();
-    }
-    auth_dot_json.last_refresh = Some(Utc::now());
-    write_auth_json(auth_file, &auth_dot_json)?;
+    let (auth_dot_json, tokens_for_account, last_refresh_for_account) = with_auth_lock(code_home, || {
+        let mut auth_dot_json = try_read_auth_json(auth_file)?;
 
-    if let Some(code_home) = auth_file.parent() {
-        if let Some(tokens) = auth_dot_json.tokens.clone() {
-            let last_refresh = auth_dot_json
-                .last_refresh
-                .unwrap_or_else(Utc::now);
-            let email = tokens.id_token.email.clone();
-            let _ = crate::auth_accounts::upsert_chatgpt_account(
-                code_home,
-                tokens,
-                last_refresh,
-                email,
-                true,
-            )?;
+        let tokens = auth_dot_json.tokens.get_or_insert_with(TokenData::default);
+        tokens.id_token = parse_id_token(&id_token).map_err(std::io::Error::other)?;
+        if let Some(access_token) = access_token {
+            tokens.access_token = access_token.to_string();
         }
+        if let Some(refresh_token) = refresh_token {
+            tokens.refresh_token = refresh_token.to_string();
+        }
+        auth_dot_json.last_refresh = Some(Utc::now());
+        write_auth_json_unlocked(auth_file, &auth_dot_json)?;
+
+        Ok((
+            auth_dot_json.clone(),
+            auth_dot_json.tokens.clone(),
+            auth_dot_json.last_refresh,
+        ))
+    })?;
+
+    if let Some(tokens) = tokens_for_account {
+        let last_refresh = last_refresh_for_account.unwrap_or_else(Utc::now);
+        let email = tokens.id_token.email.clone();
+        let _ = crate::auth_accounts::upsert_chatgpt_account(
+            code_home,
+            tokens,
+            last_refresh,
+            email,
+            true,
+        )?;
     }
     Ok(auth_dot_json)
 }

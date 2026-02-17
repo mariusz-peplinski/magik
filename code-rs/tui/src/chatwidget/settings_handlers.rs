@@ -1,5 +1,6 @@
 use super::ChatWidget;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::KeyModifiers;
 
 pub(super) fn handle_settings_paste(chat: &mut ChatWidget<'_>, text: String) -> bool {
     if chat.settings.overlay.is_none() {
@@ -100,6 +101,28 @@ pub(super) fn handle_settings_key(chat: &mut ChatWidget<'_>, key_event: KeyEvent
         }
 
         return handled;
+    }
+
+    if overlay.active_section() == crate::bottom_pane::SettingsSection::Limits
+        && !overlay.is_menu_active()
+    {
+        if let KeyCode::Char(ch) = key_event.code {
+            if ch.eq_ignore_ascii_case(&'r') {
+                let refresh_all = ch.is_ascii_uppercase()
+                    || key_event.modifiers.contains(KeyModifiers::SHIFT);
+                if refresh_all {
+                    chat.refresh_limits_for_all_accounts();
+                    chat.request_redraw();
+                    return true;
+                }
+
+                if key_event.modifiers == KeyModifiers::NONE {
+                    chat.request_latest_rate_limits(true);
+                    chat.request_redraw();
+                    return true;
+                }
+            }
+        }
     }
 
     // Give the active content first chance to handle keys (including Esc)

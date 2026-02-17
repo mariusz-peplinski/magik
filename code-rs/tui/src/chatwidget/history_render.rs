@@ -1,8 +1,9 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
+use chrono::{DateTime, Local};
 use ratatui::buffer::Cell as BufferCell;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -704,12 +705,25 @@ impl<'a> RenderRequest<'a> {
         let mut out = self.build_lines_inner(history_state);
         if self.config.tui.show_block_type_labels {
             if let Some(label) = block_type_label_for_request(self.kind, self.cell) {
-                let styled = Line::from(Span::styled(
-                    format!("[{label}]"),
-                    Style::default()
-                        .fg(crate::colors::function())
-                        .add_modifier(Modifier::BOLD),
-                ));
+                let label_style = Style::default()
+                    .fg(crate::colors::function())
+                    .add_modifier(Modifier::BOLD);
+                let mut spans = vec![Span::styled(format!("[{label}]"), label_style)];
+                if let Some(ts) = block_type_timestamp_for_request(
+                    self.kind,
+                    self.history_id,
+                    self.cell,
+                    history_state,
+                ) {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        format_timestamp_hhmm(ts),
+                        Style::default()
+                            .fg(crate::colors::text_dim())
+                            .add_modifier(Modifier::DIM),
+                    ));
+                }
+                let styled = Line::from(spans);
                 out.insert(0, styled);
             }
         }
@@ -770,6 +784,38 @@ impl<'a> RenderRequest<'a> {
         }
         Vec::new()
     }
+}
+
+fn block_type_timestamp_for_request(
+    kind: RenderRequestKind,
+    history_id: HistoryId,
+    _cell: Option<&dyn HistoryCell>,
+    history_state: &HistoryState,
+) -> Option<SystemTime> {
+    let _ = kind;
+    history_state
+        .record(history_id)
+        .and_then(history_record_timestamp)
+}
+
+fn history_record_timestamp(record: &HistoryRecord) -> Option<SystemTime> {
+    match record {
+        HistoryRecord::AssistantMessage(record) => Some(record.created_at),
+        HistoryRecord::AssistantStream(record) => record
+            .deltas
+            .first()
+            .map(|delta| delta.received_at)
+            .or(Some(record.last_updated_at)),
+        HistoryRecord::Exec(record) => Some(record.started_at),
+        HistoryRecord::MergedExec(record) => record.segments.first().map(|seg| seg.started_at),
+        HistoryRecord::RunningTool(record) => Some(record.started_at),
+        _ => None,
+    }
+}
+
+fn format_timestamp_hhmm(ts: SystemTime) -> String {
+    let dt: DateTime<Local> = ts.into();
+    dt.format("%H:%M").to_string()
 }
 
 fn block_type_label_for_request(

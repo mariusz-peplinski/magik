@@ -471,6 +471,20 @@ pub fn record_auth_invalid_hint(
     })
 }
 
+pub fn clear_auth_invalid_hint(
+    code_home: &Path,
+    account_id: &str,
+    plan: Option<&str>,
+    observed_at: DateTime<Utc>,
+) -> std::io::Result<()> {
+    with_usage_file(code_home, account_id, plan, |data| {
+        data.last_updated = observed_at;
+        let mut info = data.rate_limit.take().unwrap_or_default();
+        info.auth_invalid_at = None;
+        data.rate_limit = Some(info);
+    })
+}
+
 pub fn list_rate_limit_snapshots(
     code_home: &Path,
 ) -> std::io::Result<Vec<StoredRateLimitSnapshot>> {

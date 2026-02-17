@@ -1108,6 +1108,7 @@ struct HeaderHourlyLimitsCache {
 
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [50.0, 75.0, 90.0];
 const RATE_LIMIT_REFRESH_INTERVAL: chrono::Duration = chrono::Duration::minutes(10);
+const AUTH_INVALID_RATE_LIMIT_REFRESH_INTERVAL: chrono::Duration = chrono::Duration::minutes(5);
 
 const HEADER_HOURLY_LIMITS_CACHE_TTL: Duration = Duration::from_secs(30);
 const SESSION_MODEL_SWITCH_DEBOUNCE: Duration = Duration::from_secs(2);
@@ -6741,8 +6742,7 @@ impl ChatWidget<'_> {
         // Seed footer access indicator based on current config
         new_widget.apply_access_mode_indicator_from_config();
         // Insert the welcome cell as top-of-first-request so future model output
-        // appears below it. Also insert the Popular commands immediately so users
-        // don't wait for MCP initialization to finish.
+        // appears below it.
         let mut w = new_widget;
         let auto_defaults = w.config.auto_drive.clone();
         w.auto_state.review_enabled = auto_defaults.review_enabled;
@@ -6763,12 +6763,6 @@ impl ChatWidget<'_> {
                     w.history_push_top_next_req(upgrade_cell);
                 }
             }
-            let notice_state = history_cell::new_popular_commands_notice(
-                false,
-                w.latest_upgrade_version.as_deref(),
-            );
-            let notice_key = w.next_req_key_top();
-            let _ = w.history_insert_plain_state_with_key(notice_state, notice_key, "prelude");
             if connecting_mcp && !w.test_mode {
                 // Render connecting status as a separate cell with standard gutter and spacing
                 w.history_push_top_next_req(history_cell::new_connecting_mcp_status());
@@ -16119,17 +16113,21 @@ impl ChatWidget<'_> {
                 continue;
             }
 
-            if snapshot_map
+            let auth_invalid_at = snapshot_map
                 .get(&account.id)
-                .is_some_and(|record| record.auth_invalid_at.is_some())
-            {
-                continue;
-            }
+                .and_then(|record| record.auth_invalid_at);
 
             let plan = account
                 .tokens
                 .as_ref()
                 .and_then(|tokens| tokens.id_token.get_chatgpt_plan_type());
+
+            let refresh_interval = match auth_invalid_at {
+                Some(ts) if now.signed_duration_since(ts) < AUTH_INVALID_RATE_LIMIT_REFRESH_INTERVAL => {
+                    AUTH_INVALID_RATE_LIMIT_REFRESH_INTERVAL
+                }
+                _ => stale_interval,
+            };
 
             let should_refresh = account_usage::mark_rate_limit_refresh_attempt_if_due(
                 &code_home,
@@ -16137,7 +16135,7 @@ impl ChatWidget<'_> {
                 plan.as_deref(),
                 None,
                 now,
-                stale_interval,
+                refresh_interval,
             )
             .unwrap_or(false);
 
@@ -16154,26 +16152,44 @@ impl ChatWidget<'_> {
         }
     }
 
-    fn request_latest_rate_limits(&mut self, show_loading: bool) {
-        if self.rate_limit_fetch_inflight {
+    fn refresh_limits_for_all_accounts(&mut self) {
+        let code_home = self.config.code_home.clone();
+        let accounts = auth_accounts::list_accounts(&code_home).unwrap_or_default();
+        if accounts.is_empty() {
+            self.push_background_tail("No accounts connected; nothing to refresh.".to_string());
             return;
         }
 
-        if !show_loading {
-            let code_home = &self.config.code_home;
-            let active_id = auth_accounts::get_active_account_id(code_home)
-                .ok()
-                .flatten();
-            if let Some(active_id) = active_id {
-                if account_usage::list_rate_limit_snapshots(code_home)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .find(|record| record.account_id == active_id)
-                    .is_some_and(|record| record.auth_invalid_at.is_some())
-                {
-                    return;
-                }
+        let suffix = if accounts.len() == 1 { "" } else { "s" };
+        self.push_background_tail(format!(
+            "Refreshing rate limits for {} account{suffix}…",
+            accounts.len()
+        ));
+
+        self.request_latest_rate_limits(true);
+
+        let active_id = auth_accounts::get_active_account_id(&code_home)
+            .ok()
+            .flatten();
+        for account in accounts {
+            if active_id.as_deref() == Some(account.id.as_str()) {
+                continue;
             }
+
+            start_rate_limit_refresh_for_account(
+                self.app_event_tx.clone(),
+                self.config.clone(),
+                self.config.debug,
+                account,
+                false,
+                false,
+            );
+        }
+    }
+
+    fn request_latest_rate_limits(&mut self, show_loading: bool) {
+        if self.rate_limit_fetch_inflight {
+            return;
         }
 
         if show_loading {
@@ -16689,12 +16705,28 @@ impl ChatWidget<'_> {
     }
 
     pub(crate) fn handle_limits_command(&mut self, args: String) {
-        if !args.trim().is_empty() {
-            self.history_push_plain_state(history_cell::new_error_event(
-                "Usage: /limits".to_string(),
-            ));
+        let trimmed = args.trim();
+        if trimmed.is_empty() {
+            self.show_settings_overlay(Some(SettingsSection::Limits));
+            return;
         }
-        self.show_settings_overlay(Some(SettingsSection::Limits));
+
+        let normalized = trimmed.to_ascii_lowercase();
+        match normalized.as_str() {
+            "refresh" | "recheck" => {
+                self.show_settings_overlay(Some(SettingsSection::Limits));
+                self.request_latest_rate_limits(true);
+            }
+            "refresh-all" | "recheck-all" => {
+                self.show_settings_overlay(Some(SettingsSection::Limits));
+                self.refresh_limits_for_all_accounts();
+            }
+            _ => {
+                self.history_push_plain_state(history_cell::new_error_event(
+                    "Usage: /limits [refresh|refresh-all]".to_string(),
+                ));
+            }
+        }
     }
 
     pub(crate) fn handle_login_command(&mut self) {
@@ -29712,7 +29744,14 @@ Have we met every part of this goal and is there no further work to do?"#
             };
             let is_stale = observed_at.map(|ts| ts < stale_cutoff).unwrap_or(true);
 
-            if record.is_some_and(|record| record.auth_invalid_at.is_some()) {
+            let auth_invalid_recent = record
+                .and_then(|record| record.auth_invalid_at)
+                .is_some_and(|invalid_at| {
+                    now_ts.signed_duration_since(invalid_at)
+                        < AUTH_INVALID_RATE_LIMIT_REFRESH_INTERVAL
+                });
+
+            if auth_invalid_recent {
                 spans.push(Span::styled("?".to_string(), error_style));
                 plain.push('?');
                 if idx + 1 < accounts.len() {
@@ -30577,6 +30616,7 @@ impl Drop for AutoReviewStubGuard {
     };
 use code_core::parse_command::ParsedCommand;
 use code_core::protocol::OrderMeta;
+    use code_core::{account_usage, auth_accounts};
     use code_core::config_types::{McpServerConfig, McpServerTransportConfig};
     use code_core::protocol::{
         AskForApproval,
@@ -30676,6 +30716,73 @@ use code_core::protocol::OrderMeta;
             assert!(
                 fail_summary.contains("Failed to list tools: timeout"),
                 "expected failure message in summary, got: {fail_summary}"
+            );
+        });
+    }
+
+    #[test]
+    fn request_latest_rate_limits_retries_recent_auth_invalid_accounts() {
+        let _rt = enter_test_runtime_guard();
+        let mut harness = ChatWidgetHarness::new();
+        harness.with_chat(|chat| {
+            let account = auth_accounts::upsert_api_key_account(
+                &chat.config.code_home,
+                "sk-auth-invalid".to_string(),
+                None,
+                true,
+            )
+            .expect("insert api account");
+            account_usage::record_auth_invalid_hint(
+                &chat.config.code_home,
+                &account.id,
+                None,
+                Utc::now(),
+            )
+            .expect("record auth invalid hint");
+
+            chat.rate_limit_fetch_inflight = false;
+            chat.request_latest_rate_limits(false);
+
+            assert!(
+                chat.rate_limit_fetch_inflight,
+                "active account refresh should not be skipped when auth-invalid"
+            );
+        });
+    }
+
+    #[test]
+    fn limits_settings_shortcuts_trigger_refresh_actions() {
+        let _rt = enter_test_runtime_guard();
+        let mut harness = ChatWidgetHarness::new();
+        harness.with_chat(|chat| {
+            let _account = auth_accounts::upsert_api_key_account(
+                &chat.config.code_home,
+                "sk-shortcuts".to_string(),
+                None,
+                true,
+            )
+            .expect("insert api account");
+
+            chat.show_settings_overlay(Some(crate::bottom_pane::SettingsSection::Limits));
+
+            chat.rate_limit_fetch_inflight = false;
+            chat.handle_key_event(KeyEvent::new(
+                KeyCode::Char('r'),
+                KeyModifiers::NONE,
+            ));
+            assert!(
+                chat.rate_limit_fetch_inflight,
+                "lowercase r should refresh the active account"
+            );
+
+            chat.rate_limit_fetch_inflight = false;
+            chat.handle_key_event(KeyEvent::new(
+                KeyCode::Char('R'),
+                KeyModifiers::SHIFT,
+            ));
+            assert!(
+                chat.rate_limit_fetch_inflight,
+                "uppercase R should refresh all accounts (including active)"
             );
         });
     }

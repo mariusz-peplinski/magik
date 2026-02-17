@@ -17,29 +17,37 @@ pub(crate) struct WelcomeWidget {
 
 impl WidgetRef for &WelcomeWidget {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        let line1 = Line::from(vec![
-            Span::raw(">_ "),
+        let version = format!("v{}", code_version::version());
+        let title = format!("Magik Code {version}");
+        let line1 = Line::from(Span::styled(
+            title,
+            Style::default().add_modifier(Modifier::BOLD),
+        ));
+        line1.render(area, buf);
+
+        if area.height <= 1 {
+            return;
+        }
+
+        let line2 = Line::from(vec![
             Span::styled(
-                "Welcome to Code",
-                Style::default().add_modifier(Modifier::BOLD),
+                "by @mariusz-peplinski ",
+                Style::default().fg(crate::colors::text_dim()),
+            ),
+            Span::styled(
+                "<3",
+                Style::default()
+                    .fg(ratatui::style::Color::Rgb(255, 20, 147))
+                    .add_modifier(Modifier::BOLD),
             ),
         ]);
-        line1.render(area, buf);
-        
-        // Render second line below the first
-        if area.height > 1 {
-            let line2 = Line::from(vec![
-                Span::raw("   "), // Indent to align with text after ">_ "
-                Span::raw(crate::greeting::greeting_placeholder()),
-            ]);
-            let line2_area = Rect {
-                x: area.x,
-                y: area.y + 1,
-                width: area.width,
-                height: 1,
-            };
-            line2.render(line2_area, buf);
-        }
+        let line2_area = Rect {
+            x: area.x,
+            y: area.y + 1,
+            width: area.width,
+            height: 1,
+        };
+        line2.render(line2_area, buf);
     }
 }
 
