@@ -3,7 +3,8 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: "frames.join(\"\\n---FRAME---\\n\")"
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -11,7 +12,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > <status redacted>                                 
@@ -21,7 +21,8 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
   • Agents Enabled  • Diagnostics Enabled                              API key
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -29,7 +30,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > <status redacted>                                 

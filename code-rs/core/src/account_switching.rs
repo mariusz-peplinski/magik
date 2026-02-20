@@ -792,7 +792,7 @@ mod tests {
             home.path(),
             &c.id,
             Some("Pro"),
-            &snapshot(20.0, 10.0, Some(100)),
+            &snapshot(20.0, 10.0, None),
             now,
         )
         .expect("snapshot c");

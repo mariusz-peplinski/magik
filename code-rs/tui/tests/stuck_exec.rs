@@ -722,6 +722,13 @@ fn background_style_exec_end_with_zero_seq_does_not_get_stuck() {
         order: Some(next_order_meta(1, &mut seq)),
     });
 
+    assert!(
+        harness.running_exec_call_ids().iter().any(|id| id == &call_id),
+        "exec begin should register as running; running={:?} ended={:?}",
+        harness.running_exec_call_ids(),
+        harness.ended_exec_call_ids()
+    );
+
     // Exec end arrives while stream still active and (like background runner) reports seq 0.
     harness.handle_event(Event {
         id: "exec-end-zero".to_string(),

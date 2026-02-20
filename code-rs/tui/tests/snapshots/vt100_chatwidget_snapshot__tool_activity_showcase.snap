@@ -3,8 +3,89 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ • Hello! How can I help you today?
+
+
+
+ • I can help with various tasks including:
+
+   - Writing code
+   - Reading files
+   - Running commands
+
+
  › Can you gather details from the latest docs update?
 
    +- Web Search · Completed
@@ -36,8 +117,7 @@ expression: output
    |
    +- [Ctrl+A] Expand
 
-
- +----------------------------- ✶ Agents... -----------------------------+
+ + ✶ Agents... ---------------------------------------------------------------+
  | What can I code for you today?                                             |
  +----------------------------------------------------------------------------+
  Read Only  (Shift+Tab change)                       Ctrl+G editor  •  API key

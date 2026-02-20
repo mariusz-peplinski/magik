@@ -3,7 +3,8 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +--------------------------------------------------------+
- |                       Every Code                       |
+ |                       Magik Code                       |
+ |            Not signed in: usage unavailable            |
  +--------------------------------------------------------+
  +Settings ▸ Overview-------------------------------------+
  |                                                        |
@@ -12,7 +13,6 @@ expression: output
  |                                                        |
  |   Theme              Theme: Light - Photon (16-colo... |
  |   + Switch between preset color palettes and ad...     |
- |                                                        |
  | ↑ ↓ Move    Enter Open    Esc Close    ? Help          |
  |                                                        |
  +--------------------------------------------------------+

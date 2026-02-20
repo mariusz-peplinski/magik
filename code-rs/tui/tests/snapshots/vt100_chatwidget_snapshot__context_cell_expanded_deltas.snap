@@ -3,9 +3,9 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
-   - Running commands
 
 
  ✶ 📁 /workspace/subdir  3 changes

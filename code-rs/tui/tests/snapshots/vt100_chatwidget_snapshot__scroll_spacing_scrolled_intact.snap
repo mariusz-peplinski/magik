@@ -3,9 +3,9 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: scrolled
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
- •
    Here is another paragraph to expand height.
 
    Yet another paragraph for good measure.

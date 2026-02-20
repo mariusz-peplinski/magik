@@ -3,11 +3,11 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
-
-
  » Missing stream id for assistant answer delta
+
 
  +----------------------------------------------------------------------------+
  | What can I code for you today?                                             |

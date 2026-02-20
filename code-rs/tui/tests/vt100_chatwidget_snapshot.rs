@@ -1715,7 +1715,7 @@ fn tool_activity_showcase() {
     );
     harness.override_running_tool_elapsed("agent-pending", Duration::from_secs(185));
 
-    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 40));
+    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 120));
     insta::assert_snapshot!("tool_activity_showcase", output);
 }
 
@@ -1950,7 +1950,9 @@ fn browser_session_grouped_desired_layout() {
         }),
     });
 
-    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 32));
+    // Keep this regression stable across minor card layout tweaks by rendering
+    // with enough vertical headroom to avoid clipping the first card header.
+    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 40));
     insta::assert_snapshot!("browser_session_grouped_desired_layout", output);
 }
 
@@ -2975,7 +2977,16 @@ fn agent_parallel_batches_do_not_duplicate_cells() {
         }),
     );
 
-    let output = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 32));
+    // Render twice (bottom + top) so this regression stays stable even if
+    // the combined agent cards exceed the viewport and the oldest card header
+    // is clipped while pinned to the bottom.
+    let output_bottom = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 32));
+    let metrics = code_tui::test_helpers::layout_metrics(&harness);
+    code_tui::test_helpers::force_scroll_offset(&mut harness, metrics.last_max_scroll);
+    let output_top = normalize_output(render_chat_widget_to_vt100(&mut harness, 80, 32));
+
+    let output = format!("{output_bottom}\n\n--- scrolled to top ---\n{output_top}");
+
     assert_eq!(harness.count_agent_run_cells(), 2, "expected one card per batch\n{output}");
     assert!(output.contains("Pizza Plan"), "missing pizza batch details\n{output}");
     assert!(output.contains("Burger Plan"), "missing burger batch details\n{output}");

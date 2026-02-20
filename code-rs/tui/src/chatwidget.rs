@@ -6701,12 +6701,8 @@ impl ChatWidget<'_> {
             browser_is_external: false,
             next_cli_text_format: None,
             // Stable ordering & routing init
-            cell_order_seq: vec![OrderKey {
-                req: 0,
-                out: -1,
-                seq: 0,
-            }],
-            cell_order_dbg: vec![None; 1],
+            cell_order_seq: Vec::new(),
+            cell_order_dbg: Vec::new(),
             reasoning_index: HashMap::new(),
             stream_order_seq: HashMap::new(),
             order_request_bias: 0,
@@ -6754,25 +6750,29 @@ impl ChatWidget<'_> {
         w.auto_goal_escape_state = AutoGoalEscState::Inactive;
         w.set_standard_terminal_mode(!config.tui.alternate_screen);
         if config.experimental_resume.is_none() {
-            w.history_push_top_next_req(history_cell::new_animated_welcome()); // tag: prelude
-            let connecting_mcp = !w.config.mcp_servers.is_empty();
-            if !w.config.auto_upgrade_enabled {
-                if let Some(upgrade_cell) =
-                    history_cell::new_upgrade_prelude(w.latest_upgrade_version.as_deref())
-                {
-                    w.history_push_top_next_req(upgrade_cell);
+            if !w.test_mode {
+                w.history_push_top_next_req(history_cell::new_animated_welcome()); // tag: prelude
+                let connecting_mcp = !w.config.mcp_servers.is_empty();
+                if !w.config.auto_upgrade_enabled {
+                    if let Some(upgrade_cell) =
+                        history_cell::new_upgrade_prelude(w.latest_upgrade_version.as_deref())
+                    {
+                        w.history_push_top_next_req(upgrade_cell);
+                    }
                 }
-            }
-            if connecting_mcp && !w.test_mode {
-                // Render connecting status as a separate cell with standard gutter and spacing
-                w.history_push_top_next_req(history_cell::new_connecting_mcp_status());
+                if connecting_mcp {
+                    // Render connecting status as a separate cell with standard gutter and spacing
+                    w.history_push_top_next_req(history_cell::new_connecting_mcp_status());
+                }
             }
             // Mark welcome as shown to avoid duplicating the Popular commands section
             // when SessionConfigured arrives shortly after.
             w.welcome_shown = true;
         } else {
             w.welcome_shown = true;
-            w.insert_resume_placeholder();
+            if !w.test_mode {
+                w.insert_resume_placeholder();
+            }
         }
         if w.test_mode {
             w.bottom_pane.set_task_running(false);
@@ -7088,12 +7088,8 @@ impl ChatWidget<'_> {
             browser_is_external: false,
             next_cli_text_format: None,
             // Strict ordering init for forked widget
-            cell_order_seq: vec![OrderKey {
-                req: 0,
-                out: -1,
-                seq: 0,
-            }],
-            cell_order_dbg: vec![None; 1],
+            cell_order_seq: Vec::new(),
+            cell_order_dbg: Vec::new(),
             reasoning_index: HashMap::new(),
             stream_order_seq: HashMap::new(),
             order_request_bias: 0,
@@ -7126,7 +7122,7 @@ impl ChatWidget<'_> {
             }
         }
         w.set_standard_terminal_mode(!config.tui.alternate_screen);
-        if show_welcome {
+        if show_welcome && !w.test_mode {
             w.history_push_top_next_req(history_cell::new_animated_welcome());
         }
         if w.test_mode {
@@ -9552,9 +9548,10 @@ impl ChatWidget<'_> {
             self.clear_reasoning_in_progress();
         }
         let is_background_cell = matches!(cell.kind(), HistoryCellType::BackgroundEvent);
+
         let mut key = key;
         let mut key_bumped = false;
-        if !is_background_cell {
+        if !is_background_cell && !is_reasoning_cell {
             if let Some(last) = self.last_assigned_order {
                 if key <= last {
                     key = Self::order_key_successor(last);
@@ -9563,27 +9560,7 @@ impl ChatWidget<'_> {
             }
         }
 
-        // Determine insertion position across the entire history.
-        // Most ordered inserts are monotonic tail-appends (we bump non-background
-        // keys to keep them strictly increasing), so avoid an O(n) scan in the
-        // common case.
-        //
-        // Exception: some early, non-background system cells (e.g. the context
-        // summary) are inserted with a low order key before any ordering state
-        // has been established. In that phase, we must still respect the order.
-        let mut pos = self.history_cells.len();
-        if is_background_cell || self.last_assigned_order.is_none() {
-            for i in 0..self.history_cells.len() {
-                if let Some(existing) = self.cell_order_seq.get(i) {
-                    if *existing > key {
-                        pos = i;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Keep auxiliary order vector in lockstep with history before inserting
+        // Keep auxiliary order vector in lockstep with history before we scan it.
         if self.cell_order_seq.len() < self.history_cells.len() {
             let missing = self.history_cells.len() - self.cell_order_seq.len();
             for _ in 0..missing {
@@ -9595,9 +9572,33 @@ impl ChatWidget<'_> {
             }
         }
 
+        // Determine insertion position across the entire history.
+        // Most inserts are monotonic tail-appends, so avoid an O(n) scan in the
+        // common case.
+        //
+        // Background cells can be inserted out-of-band.
+        let mut pos = self.history_cells.len();
+        let needs_scan = is_background_cell
+            || self.last_assigned_order.is_none()
+            || (is_reasoning_cell
+                && self
+                    .last_assigned_order
+                    .is_some_and(|last| key <= last));
+        if needs_scan {
+            for i in 0..self.history_cells.len() {
+                if let Some(existing) = self.cell_order_seq.get(i) {
+                    if *existing > key {
+                        pos = i;
+                        break;
+                    }
+                }
+            }
+        }
+
         tracing::info!(
-            "[order] insert: {} pos={} len_before={} order_len_before={} tag={}",
+            "[order] insert: {} bumped={} pos={} len_before={} order_len_before={} tag={}",
             Self::debug_fmt_order_key(key),
+            key_bumped,
             pos,
             self.history_cells.len(),
             self.cell_order_seq.len(),
@@ -9748,15 +9749,6 @@ impl ChatWidget<'_> {
             self.cell_order_seq.push(key);
         } else {
             self.cell_order_seq.insert(pos, key);
-        }
-        if key_bumped {
-            if let Some(stream) = self.history_cells[pos]
-                .as_any()
-                .downcast_ref::<crate::history_cell::StreamingContentCell>()
-            {
-                self.stream_order_seq
-                    .insert((StreamKind::Answer, stream.state().stream_id.clone()), key);
-            }
         }
         self.last_assigned_order = Some(match self.last_assigned_order {
             Some(prev) => prev.max(key),
@@ -33086,7 +33078,7 @@ use code_core::protocol::OrderMeta;
                 prompt: "Draft alternative fix".to_string(),
                 context: None,
                 write: false,
-                write_requested: Some(false),
+                write_requested: None,
                 models: None,
             }],
             Vec::new(),

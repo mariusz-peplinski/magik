@@ -3,10 +3,10 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: "frames.join(\"\\n---FRAME---\\n\")"
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
    - Running commands
-
 
   Auto Drive > Ready: run cargo check  ✶ Running (Xs)
  +----------------------------------------------------------------------------+
@@ -16,10 +16,10 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
 
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
    - Running commands
-
 
   Auto Drive > Running cargo check... · Installed dependencies  ✶ Thinking (Xs)
  +----------------------------------------------------------------------------+
@@ -29,10 +29,10 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
 
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
    - Running commands
-
 
   Auto Drive > Running cargo check... · Installed dependencies  ✶ Running (Xs)
  +----------------------------------------------------------------------------+

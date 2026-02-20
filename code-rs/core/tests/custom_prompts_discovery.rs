@@ -123,7 +123,7 @@ async fn prefers_code_home_when_both_locations_exist() -> Result<()> {
     let env = EnvBackup::new(&["HOME", "CODE_HOME", "CODEX_HOME"]);
 
     let fake_home = TempDir::new()?;
-    let code_home = fake_home.path().join(".code");
+    let code_home = fake_home.path().join(".magik");
     let codex_home = fake_home.path().join(".codex");
     let code_prompts = code_home.join("prompts");
     let codex_prompts = codex_home.join("prompts");

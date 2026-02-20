@@ -129,7 +129,7 @@ impl HeightManager {
         }
 
         // Status bar height is fixed at 4 when enabled (2 border rows + 2 inner rows).
-        let status_h = if status_enabled { 4u16 } else { 0u16 };
+        let mut status_h = if status_enabled { 4u16 } else { 0u16 };
 
         // Cap the bottom pane to a percentage of screen height, with a minimum of 5 rows.
         let percent_cap: u16 = ((area.height as u32).saturating_mul(self.cfg.bottom_percent_cap as u32) / 100) as u16;
@@ -137,7 +137,7 @@ impl HeightManager {
         let desired = bottom_desired_height.max(5).min(bottom_cap);
 
         // Bottom pane policy: Grow immediately, confirm small decreases over a few frames
-        let bottom_h = match (self.last_bottom, self.bypass_once) {
+        let mut bottom_h = match (self.last_bottom, self.bypass_once) {
             (Some(_), true) => desired,
             (Some(prev), false) => {
                 if desired > prev {
@@ -168,7 +168,6 @@ impl HeightManager {
             }
             (None, _) => desired,
         };
-        self.last_bottom = Some(bottom_h);
         // Clear bypass after use
         if self.bypass_once { self.bypass_once = false; }
 
@@ -223,12 +222,30 @@ impl HeightManager {
         let min_history = 1u16;
         let total_non_history = status_h + bottom_h + hud_h;
         if total_non_history.saturating_add(min_history) > area.height {
-            let overflow = total_non_history.saturating_add(min_history) - area.height;
+            let mut overflow = total_non_history.saturating_add(min_history) - area.height;
+
             if hud_h > 0 {
                 let reduce = hud_h.min(overflow);
                 hud_h -= reduce;
+                overflow = overflow.saturating_sub(reduce);
             }
+
+            if overflow > 0 {
+                let min_bottom = 5u16;
+                let reducible = bottom_h.saturating_sub(min_bottom);
+                let reduce = reducible.min(overflow);
+                bottom_h = bottom_h.saturating_sub(reduce);
+                overflow = overflow.saturating_sub(reduce);
+            }
+
+            if overflow > 0 {
+                // As a last resort, drop the status bar entirely.
+                status_h = 0;
+            }
+
         }
+
+        self.last_bottom = Some(bottom_h);
 
         // Build rects in the same order used by ChatWidget::layout_areas.
         if hud_h > 0 {

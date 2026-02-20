@@ -3,7 +3,8 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: "frames.join(\"\\n---FRAME---\\n\")"
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -11,7 +12,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > Comparing diffs against last run.  ✶ Thinking (Xs)
@@ -22,7 +22,8 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
 
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -30,7 +31,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > Ready: run cargo test --workspace  ✶ Running (Xs)
@@ -41,7 +41,8 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
 
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -49,7 +50,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > waiting for code review...  ✶ Awaiting review (Xs)
@@ -60,7 +60,8 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
 
 ---FRAME---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
 
  • I can help with various tasks including:
@@ -68,7 +69,6 @@ expression: "frames.join(\"\\n---FRAME---\\n\")"
    - Writing code
    - Reading files
    - Running commands
-
 
 
   Auto Drive > Queued new command for execution.  ✶ Thinking (Xs)

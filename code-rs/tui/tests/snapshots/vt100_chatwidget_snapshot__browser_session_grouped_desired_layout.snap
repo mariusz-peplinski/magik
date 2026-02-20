@@ -3,8 +3,16 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
+
+
+
+
+
+
+ • Hello! How can I help you today?
 
 
 
@@ -29,7 +37,7 @@ expression: output
    |
    +- [Ctrl+B] View · [Esc] Stop
 
- +----------------------------- ✶ Browsing... -----------------------------+
+ + ✶ Browsing... -------------------------------------------------------------+
  | What can I code for you today?                                             |
  +----------------------------------------------------------------------------+
  Read Only  (Shift+Tab change)                       Ctrl+G editor  •  API key

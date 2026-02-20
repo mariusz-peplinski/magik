@@ -2,12 +2,11 @@
 source: tui/tests/bottom_spacer_clip_regression.rs
 expression: output
 ---
- |                                           Every Code                                           |
+ |                                           Magik Code                                           |
 
-   with scroll offsets.
-
-
+ |                                Not signed in: usage unavailable                                |
    Assistant reply #6 contains a deliberately verbose paragraph that discusses wrapping,
+
  • stream padding, viewport math, and the importance of not clipping the final line.
 
    We repeat the insight to guarantee the total height exceeds the viewport.
@@ -26,6 +25,7 @@ expression: output
    Final assistant response to seal the deal with yet another wrapped explanation.
  • It mentions CODE_TUI_ANTICUTOFF repeatedly to highlight the feature’s role in protecting the
    last row of history.
+
 
  | What can I code for you today?                                                                 |
 

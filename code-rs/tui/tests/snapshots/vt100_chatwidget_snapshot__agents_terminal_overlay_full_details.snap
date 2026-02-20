@@ -3,7 +3,8 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: "&output"
 ---
  +--------------------------------------------------------------------------------------------+
- |                                         Every Code                                         |
+ |                                         Magik Code                                         |
+ |                              Not signed in: usage unavailable                              |
  +--------------------------------------------------------------------------------------------+
  + Agents - Ctrl+A to close-------------------------------------------------------------------+
  | Filter   1 All - 2 Running - 3 Failed - 4 Done - 5 Review               Sort: ( Recent ▼ ) |
@@ -27,7 +28,6 @@ expression: "&output"
  | |                      |||   MM:SS  Collecting release notes                             | |
  | |                      |||          Reviewing eng updates                                | |
  | |                      |||   STATUS                                                      | |
- | |                      |||   MM:SS  Status → Completed                                   | |
  | +----------------------++----------------------------------------------------------------+ |
  | [↑/↓/←/→] Navigate   [1-5] Filter   [S] Sort   [H/A] Toggle Details   [X] Stop   [Ctrl+A]  |
  +--------------------------------------------------------------------------------------------+

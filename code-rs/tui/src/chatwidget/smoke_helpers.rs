@@ -21,8 +21,12 @@ use once_cell::sync::Lazy;
 use chrono::Utc;
 use ratatui::text::Line;
 use std::collections::VecDeque;
+use std::ffi::OsString;
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
 static TEST_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
@@ -33,6 +37,72 @@ static TEST_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
         .expect("test runtime")
 });
 
+static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+struct EnvIsolation {
+    #[allow(dead_code)]
+    lock: std::sync::MutexGuard<'static, ()>,
+    saved: Vec<(&'static str, Option<OsString>)>,
+    _temp_home: Option<TempDir>,
+}
+
+impl EnvIsolation {
+    fn new() -> Self {
+        let lock = ENV_LOCK.lock().expect("env lock");
+        let keys = [
+            "HOME",
+            "CODE_HOME",
+            "CODEX_HOME",
+            "CODEX_TUI_FAKE_HOUR",
+            "CODEX_TUI_FORCE_MINIMAL_HEADER",
+            "CODE_TUI_TEST_MODE",
+        ];
+
+        let saved = keys
+            .iter()
+            .map(|key| (*key, std::env::var_os(key)))
+            .collect::<Vec<_>>();
+
+        unsafe {
+            std::env::set_var("CODEX_TUI_FAKE_HOUR", "12");
+            std::env::set_var("CODEX_TUI_FORCE_MINIMAL_HEADER", "1");
+            std::env::set_var("CODE_TUI_TEST_MODE", "1");
+        }
+
+        let mut temp_home = None;
+        if std::env::var_os("CODE_HOME").is_none() {
+            let home = TempDir::new().expect("temp HOME");
+            let code_home = home.path().join(".magik");
+            std::fs::create_dir_all(&code_home).expect("create CODE_HOME");
+            unsafe {
+                std::env::set_var("HOME", home.path());
+                std::env::set_var("CODE_HOME", &code_home);
+                std::env::remove_var("CODEX_HOME");
+            }
+            temp_home = Some(home);
+        }
+
+        Self {
+            lock,
+            saved,
+            _temp_home: temp_home,
+        }
+    }
+}
+
+impl Drop for EnvIsolation {
+    fn drop(&mut self) {
+        for (key, value) in self.saved.drain(..) {
+            unsafe {
+                match value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+}
+
 pub fn enter_test_runtime_guard() -> tokio::runtime::EnterGuard<'static> {
     TEST_RUNTIME.enter()
 }
@@ -41,6 +111,8 @@ pub struct ChatWidgetHarness {
     chat: ChatWidget<'static>,
     events: Receiver<AppEvent>,
     helper_seq: u64,
+    #[allow(dead_code)]
+    env: EnvIsolation,
 }
 
 // Use a deterministic Auto Drive placeholder so VT100 snapshots stay stable.
@@ -74,22 +146,35 @@ impl AutoContinueModeFixture {
 
 impl ChatWidgetHarness {
     pub fn new() -> Self {
-        // Stabilize time-of-day dependent greeting so VT100 snapshots remain deterministic.
-        // Safe: tests run single-threaded by design.
-        unsafe { std::env::set_var("CODEX_TUI_FAKE_HOUR", "12"); }
+        let env = EnvIsolation::new();
 
-        unsafe {
-            std::env::set_var("CODEX_TUI_FORCE_MINIMAL_HEADER", "1");
+        let code_home = std::env::var_os("CODE_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let cwd_override = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("workspace");
+        std::fs::create_dir_all(&cwd_override).expect("create cwd_override");
+        if !cwd_override.join(".git").exists() {
+            let git_init = std::process::Command::new("git")
+                .current_dir(&cwd_override)
+                .args(["init", "--quiet"])
+                .status();
+            if git_init.is_err() {
+                std::fs::create_dir_all(cwd_override.join(".git")).expect("create .git");
+            }
         }
 
-        unsafe {
-            std::env::set_var("CODE_TUI_TEST_MODE", "1");
-        }
+        let overrides = ConfigOverrides {
+            cwd: Some(cwd_override),
+            ..ConfigOverrides::default()
+        };
 
         let cfg = Config::load_from_base_config_with_overrides(
             ConfigToml::default(),
-            ConfigOverrides::default(),
-            std::env::temp_dir(),
+            overrides,
+            code_home,
         )
         .expect("config");
 
@@ -118,6 +203,7 @@ impl ChatWidgetHarness {
             chat,
             events: rx,
             helper_seq: 0,
+            env,
         };
         harness.chat.auto_state.elapsed_override = Some(Duration::from_secs(1));
         harness
@@ -181,6 +267,9 @@ impl ChatWidgetHarness {
                 }
                 AppEvent::FlushInterruptsIfIdle => {
                     self.chat.flush_interrupts_if_stream_idle();
+                }
+                AppEvent::FlushPendingExecEnds => {
+                    self.chat.flush_pending_exec_ends();
                 }
                 AppEvent::ShowAgentsOverview => {
                     self.chat.ensure_settings_overlay_section(SettingsSection::Agents);
@@ -469,8 +558,15 @@ impl ChatWidgetHarness {
     }
 
     pub fn push_user_prompt(&mut self, message: impl Into<String>) {
+        // Mirror the live TUI behavior: user prompts should appear at the top
+        // of the next request, before any model/tool output.
+        let key = self.chat.next_req_key_prompt();
         let state = history_cell::new_user_prompt(message.into());
-        self.chat.history_push_plain_state(state);
+        let _ = self
+            .chat
+            .history_insert_plain_state_with_key(state, key, "prompt");
+        self.chat.pending_user_prompts_for_next_turn =
+            self.chat.pending_user_prompts_for_next_turn.saturating_add(1);
     }
 
     pub fn push_background_event(&mut self, message: impl Into<String>) {

@@ -3,24 +3,24 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: section_closed
 ---
  +------------------------------------------------------------------------------------------------+
- |                                           Every Code                                           |
+ |                                           Magik Code                                           |
+ |                                Not signed in: usage unavailable                                |
  +------------------------------------------------------------------------------------------------+
  +Settings ▸ Model--------------------------------------------------------------------------------+
  |                                                                                                |
  | ›  Model              + Select Model & Reasoning --------------------------------------------+ |
  |    Theme              |                                                                      | |
- |    Updates            |  Current model: GPT-5.2-Codex                                        | |
- |    Accounts           |  Reasoning effort: Medium                                            | |
- |    Agents             |                                                                      | |
- |    Prompts            |  GPT-5.2                                                             | |
- |    Skills             |  Latest frontier model with improvements across knowledge, reasoning | |
- |    Auto Drive         |     XHigh - Extra high reasoning depth for complex problems          | |
- |    Review             |     High - Maximizes reasoning depth for complex or ambiguous proble | |
- |    Planning           |     Medium - Provides a solid balance of reasoning depth and latency | |
- |    Validation         |     Low - Balances speed with some reasoning; useful for straightfor | |
- |    Chrome             |                                                                      | |
- |    MCP                |                                                                      | |
- |  ↓ Notifications      +----------------------------------------------------------------------+ |
+ |    Magik Settings     |  Current model: GPT-5.2-Codex                                        | |
+ |    Updates            |  Reasoning effort: Medium                                            | |
+ |    Accounts           |                                                                      | |
+ |    Agents             |  GPT-5.2                                                             | |
+ |    Prompts            |  Latest frontier model with improvements across knowledge, reasoning | |
+ |    Skills             |     XHigh - Extra high reasoning depth for complex problems          | |
+ |    Auto Drive         |     High - Maximizes reasoning depth for complex or ambiguous proble | |
+ |    Review             |     Medium - Provides a solid balance of reasoning depth and latency | |
+ |    Planning           |     Low - Balances speed with some reasoning; useful for straightfor | |
+ |    Validation         |                                                                      | |
+ |  ↓ Chrome             +----------------------------------------------------------------------+ |
  | ↑ ↓ Move    Enter Open    Esc Close    ? Help                                                  |
  |                                                                                                |
  +------------------------------------------------------------------------------------------------+

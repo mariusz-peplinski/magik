@@ -3,7 +3,8 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +------------------------------------------------------------------------------------------------+
- |                                           Every Code                                           |
+ |                                           Magik Code                                           |
+ |                                Not signed in: usage unavailable                                |
  +------------------------------------------------------------------------------------------------+
  +Settings ▸ Overview-----------------------------------------------------------------------------+
  |                                                                                                |
@@ -13,8 +14,7 @@ expression: output
  |   Theme              Theme: Light - Photon (16-color) · Spinner: Diamond                       |
  |   + Switch between preset color palettes and adjust contrast.                                  |
  |                                                                                                |
- |   Updates            Auto update: Disabled                                                     |
- |   + Control CLI auto-update cadence and release channels.                                      |
+ |   Magik Settings     Reasoning: Off · Details: Off · Block labels: Off · Corners: Sharp        |
  | ↑ ↓ Move    Enter Open    Esc Close    ? Help                                                  |
  |                                                                                                |
  +------------------------------------------------------------------------------------------------+

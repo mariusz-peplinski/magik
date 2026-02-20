@@ -3,24 +3,24 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: section_open
 ---
  +------------------------------------------------------------------------------------------------+
- |                                           Every Code                                           |
+ |                                           Magik Code                                           |
+ |                                Not signed in: usage unavailable                                |
  +------------------------------------------------------------------------------------------------+
  +Settings ▸ Model--------------------------------------------------------------------------------+
  |                                                                                                |
  | ›  Model              + Select Model & Reasoning --------------------------------------------+ |
  |    Theme              |                                                                      | |
- |    Updates            |  Curren+------------------------------+                              | |
- |    Accounts           |  Reason|Model Shortcuts               |                              | |
- |    Agents             |        |                              |                              | |
- |    Prompts            |  GPT-5.|• Esc    Return to overview   |                              | |
- |    Skills             |  Latest|• Tab    Cycle sections       |s across knowledge, reasoning | |
- |    Auto Drive         |     XHi|• Shift+Tab  Cycle backwards  |for complex problems          | |
- |    Review             |     Hig|• ?      Toggle this help     |r complex or ambiguous proble | |
- |    Planning           |     Med|                              |f reasoning depth and latency | |
- |    Validation         |     Low|Press Esc to close            |oning; useful for straightfor | |
- |    Chrome             |        +------------------------------+                              | |
- |    MCP                |                                                                      | |
- |  ↓ Notifications      +----------------------------------------------------------------------+ |
+ |    Magik Settings     |  Curren+------------------------------+                              | |
+ |    Updates            |  Reason|Model Shortcuts               |                              | |
+ |    Accounts           |        |                              |                              | |
+ |    Agents             |  GPT-5.|• Esc    Return to overview   |                              | |
+ |    Prompts            |  Latest|• Tab    Cycle sections       |s across knowledge, reasoning | |
+ |    Skills             |     XHi|• Shift+Tab  Cycle backwards  |for complex problems          | |
+ |    Auto Drive         |     Hig|• ?      Toggle this help     |r complex or ambiguous proble | |
+ |    Review             |     Med|                              |f reasoning depth and latency | |
+ |    Planning           |     Low|Press Esc to close            |oning; useful for straightfor | |
+ |    Validation         |        +------------------------------+                              | |
+ |  ↓ Chrome             +----------------------------------------------------------------------+ |
  | ↑ ↓ Move    Enter Open    Esc Close    ? Help                                                  |
  |                                                                                                |
  +------------------------------------------------------------------------------------------------+

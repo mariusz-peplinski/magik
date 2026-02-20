@@ -3,10 +3,9 @@ source: tui/tests/vt100_chatwidget_snapshot.rs
 expression: output
 ---
  +----------------------------------------------------------------------------+
- |                                 Every Code                                 |
+ |                                 Magik Code                                 |
+ |                      Not signed in: usage unavailable                      |
  +----------------------------------------------------------------------------+
-
-
  › Can you help me understand the available commands?
 
 
@@ -19,6 +18,7 @@ expression: output
    - Writing code
    - Reading files
    - Running commands
+
 
 
  +----------------------------------------------------------------------------+
