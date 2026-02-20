@@ -1,115 +1,54 @@
-<img src="docs/images/every-logo.png" alt="Every Code Logo" width="400">
+<pre><font color="#ff1493">
+ ▄                 ▄▄ ▀▀ ▄▄         
+ ███▄███▄ ▄▀▀█▄ ▄████ ██ ██ ▄█▀     
+ ██ ██ ██ ▄█▀██ ██ ██ ██ ████       
+▄██ ██ ▀█▄▀█▄██▄▀████▄██▄██ ▀█▄     
+                   ██               
+                 ▀▀▀                
+</font></pre>
 
-&ensp;
+# Magik Code
 
-**Every Code** (Code for short) is a fast, local coding agent for your terminal. It's a community-driven fork of `openai/codex` focused on real developer ergonomics: Browser integration, multi-agents, theming, and reasoning control — all while staying compatible with upstream.
+Magik is a fast, local coding agent for your terminal.
 
-&ensp;
-## What's new in v0.6.0 (December 2025)
+This repository is a fork of **Every Code** (`just-every/code`) — and through that lineage, a fork of `openai/codex` — focused on improving day-to-day TUI ergonomics and customization.
 
-- **Auto Review** – background ghost-commit watcher runs reviews in a separate worktree whenever a turn changes code; uses `codex-5.1-mini-high` and reports issues plus ready-to-apply fixes without blocking the main thread.
-- **Code Bridge** – Sentry-style local bridge that streams errors, console, screenshots, and control from running apps into Code; ships an MCP server; install by asking Code to pull `https://github.com/just-every/code-bridge`.
-- **Plays well with Auto Drive** – reviews run in parallel with long Auto Drive tasks so quality checks land while the flow keeps moving.
-- **Quality-first focus** – the release shifts emphasis from "can the model write this file" to "did we verify it works".
-- _From v0.5.0:_ rename to Every Code, upgraded `/auto` planning/recovery, unified `/settings`, faster streaming/history with card-based activity, and more reliable `/resume` + `/undo`.
+## What’s different in Magik (vs Every Code)
 
- [Read the full notes in RELEASE_NOTES.md](docs/release-notes/RELEASE_NOTES.md)
+- **Multi‑account overview + rotation strategies**: a clearer limits UI plus multiple rotation modes (Manual / On limit / Even usage / Step 45% / Reset‑based).
+- **Better keyboard control**: dedicated shortcuts for model and reasoning changes (and separate toggles for reasoning vs “tool/explore” details).
+- **Reasoning toggle ≠ tool‑details toggle**: full reasoning visibility is independent from the “explore details” view.
+- **Clearly labeled blocks**: streamed output is presented in explicitly labeled sections (Answer / Reasoning / Tool calls, etc.).
+- **More themes + easy theme editing**: lots of built‑ins and file‑backed themes stored in your Magik home so you can add/edit without recompiling.
+- **Customizable “spinner verbs”**: customize status phrases (e.g. Thinking/Responding/Using tools) via `~/.magik/status_texts.json`.
+- **UI polish**: optional rounded corners and other small layout/visual tweaks.
 
-&ensp;
-## Why Every Code
-
-- 🚀 **Auto Drive orchestration** – Multi-agent automation that now self-heals and ships complete tasks.
-- 🌐 **Browser Integration** – CDP support, headless browsing, screenshots captured inline.
-- 🤖 **Multi-agent commands** – `/plan`, `/code` and `/solve` coordinate multiple CLI agents.
-- 🧭 **Unified settings hub** – `/settings` overlay for limits, theming, approvals, and provider wiring.
-- 🎨 **Theme system** – Switch between accessible presets, customize accents, and preview live via `/theme`.
-- 🔌 **MCP support** – Extend with filesystem, DBs, APIs, or your own tools.
-- 🔒 **Safety modes** – Read-only, approvals, and workspace sandboxing.
-
-&ensp;
-## AI Videos
-
-&ensp;
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=Ra3q8IVpIOc">
-    <img src="docs/images/video-auto-review-play.jpg" alt="Play Auto Review video" width="100%">
-  </a><br>
-  <strong>Auto Review</strong>
+  <img src="magik.png" alt="Magik screenshot" width="900">
 </p>
 
 &ensp;
-<p align="center">
-  <a href="https://youtu.be/UOASHZPruQk">
-    <img src="docs/images/video-auto-drive-new-play.jpg" alt="Play Introducing Auto Drive video" width="100%">
-  </a><br>
-  <strong>Auto Drive Overview</strong>
-</p>
-
-&ensp;
-<p align="center">
-  <a href="https://youtu.be/sV317OhiysQ">
-    <img src="docs/images/video-v03-play.jpg" alt="Play Multi-Agent Support video" width="100%">
-  </a><br>
-  <strong>Multi-Agent Promo</strong>
-</p>
-
-
-
-&ensp;
-## Quickstart
-
-### Run
+## Quickstart (from source)
 
 ```bash
-npx -y @just-every/code
+./build-fast.sh
+./code-rs/bin/magik
 ```
 
-### Install & Run
+### Install locally (recommended)
 
 ```bash
-npm install -g @just-every/code
-code // or `coder` if you're using VS Code
+./scripts/install-magik-local.sh --build
+magik --version
+magik
 ```
-
-Note: If another tool already provides a `code` command (e.g. VS Code), our CLI is also installed as `coder`. Use `coder` to avoid conflicts.
-
-**Authenticate** (one of the following):
-- **Sign in with ChatGPT** (Plus/Pro/Team; uses models available to your plan)
-  - Run `code` and pick "Sign in with ChatGPT"
-- **API key** (usage-based)
-  - Set `export OPENAI_API_KEY=xyz` and run `code`
-
-### Install Claude & Gemini (optional)
-
-Every Code supports orchestrating other AI CLI tools. Install these and config to use alongside Code.
-
-```bash
-# Ensure Node.js 20+ is available locally (installs into ~/.n)
-npm install -g n
-export N_PREFIX="$HOME/.n"
-export PATH="$N_PREFIX/bin:$PATH"
-n 20.18.1
-
-# Install the companion CLIs
-export npm_config_prefix="${npm_config_prefix:-$HOME/.npm-global}"
-mkdir -p "$npm_config_prefix/bin"
-export PATH="$npm_config_prefix/bin:$PATH"
-npm install -g @anthropic-ai/claude-code @google/gemini-cli @qwen-code/qwen-code
-
-# Quick smoke tests
-claude --version
-gemini --version
-qwen --version
-```
-
-> ℹ️ Add `export N_PREFIX="$HOME/.n"` and `export PATH="$N_PREFIX/bin:$PATH"` (plus the `npm_config_prefix` bin path) to your shell profile so the CLIs stay on `PATH` in future sessions.
 
 &ensp;
 ## Commands
 
 ### Browser
 ```bash
-# Connect code to external Chrome browser (running CDP)
+# Connect Magik to external Chrome browser (running CDP)
 /chrome        # Connect with auto-detect port
 /chrome 9222   # Connect to specific port
 
@@ -159,17 +98,18 @@ qwen --version
 
 ### Keyboard shortcuts
 
-- `Ctrl+M` — switch session model (keeps the current reasoning level when supported; otherwise steps down)
-- `Ctrl+N` — cycle reasoning level for the current model (wraps from max supported back to the lowest)
+- `Ctrl+Y` — switch session model
+- `Ctrl+N` — cycle reasoning level for the current model (wraps)
 - `Ctrl+R` — toggle reasoning visibility
-- `Ctrl+Shift+M` — toggle mouse capture (helps with text selection)
+- `Ctrl+E` — toggle “explore details” (tool-call details and other deep UI panels)
+- `Ctrl+Shift+Y` — toggle mouse capture (helps with text selection)
 
-The TUI header shows `Model` and `Reasoning` along with the `Ctrl+M` / `Ctrl+N` hints, and the title reads `Magik Code`.
+The TUI header shows `Model` and `Reasoning` along with the `Ctrl+Y` / `Ctrl+N` hints, and the title reads `Magik Code`.
 
 ## CLI reference
 
 ```shell
-code [options] [prompt]
+magik [options] [prompt]
 
 Options:
   --model <name>        Override the model for the active provider (e.g. gpt-5.1)
@@ -188,7 +128,7 @@ Note: `--model` only changes the model name sent to the active provider. To use 
 &ensp;
 ## Memory & project docs
 
-Every Code can remember context across sessions:
+Magik can remember context across sessions:
 
 1. **Create an `AGENTS.md` or `CLAUDE.md` file** in your project root:
 ```markdown
@@ -204,7 +144,7 @@ This is a React TypeScript application with:
 - `/server/` - Backend services
 ```
 
-2. **Session memory**: Every Code maintains conversation history
+2. **Session memory**: Magik maintains conversation history
 3. **Codebase analysis**: Automatically understands project structure
 
 &ensp;
@@ -214,19 +154,33 @@ For automation and CI/CD:
 
 ```shell
 # Run a specific task
-code --no-approval "run tests and fix any failures"
+magik --no-approval "run tests and fix any failures"
 
 # Generate reports
-code --read-only "analyze code quality and generate report"
+magik --read-only "analyze code quality and generate report"
 
 # Batch processing
-code --config output_format=json "list all TODO comments"
+magik --config output_format=json "list all TODO comments"
 ```
+
+&ensp;
+## Multi‑account usage & rotation
+
+Magik supports multiple saved sign‑ins (ChatGPT auth and/or API keys) and can rotate between accounts based on rate-limit state.
+
+- Manage accounts with `/login`.
+- Inspect limits with `/limits` (use `refresh` or `refresh-all` to force re-checks).
+- Configure rotation from `/settings` → `limits` (or `Ctrl+S` → Limits/Accounts), including:
+  - **Manual**: never auto-switch.
+  - **On limit**: only switch when the active account is limited.
+  - **Even usage**: keep accounts within ~10% usage.
+  - **Step 45%**: rotate when an account crosses 45% steps.
+  - **Reset‑based**: prefer accounts with the soonest short-window reset.
 
 &ensp;
 ## Model Context Protocol (MCP)
 
-Every Code supports MCP for extended capabilities:
+Magik supports MCP for extended capabilities:
 
 - **File operations**: Advanced file system access
 - **Database connections**: Query and modify databases
@@ -247,7 +201,7 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/project"]
 Main config file: `~/.magik/config.toml`
 
 > [!NOTE]
-> Every Code defaults to `~/.magik/` for config/state. You can override that with `CODE_HOME` (or `CODEX_HOME`). For backwards compatibility, when no home override is set and a file is missing in `~/.magik/`, Code may read the legacy `~/.magic/` or `~/.codex/` copy. Writes go to the resolved Code home.
+> Magik defaults to `~/.magik/` for config/state. You can override that with `CODE_HOME` (or `CODEX_HOME`). For backwards compatibility, when no home override is set and a file is missing in `~/.magik/`, Magik may read the legacy `~/.magic/` or `~/.codex/` copy. Writes go to the resolved Magik home.
 
 ```toml
 # Model settings
@@ -259,9 +213,13 @@ approval_policy = "on-request"  # untrusted | on-failure | on-request | never
 model_reasoning_effort = "medium" # low | medium | high
 sandbox_mode = "workspace-write"
 
-# UI preferences see THEME_CONFIG.md
+# UI preferences
 [tui.theme]
 name = "light-photon"
+
+[tui.spinner]
+# Built-in name from the bundled spinners list (kebab-case), or a custom id.
+name = "diamond"
 
 # Optional: file-backed themes loaded at startup and shown in /theme.
 # Create files in ~/.magik/themes/*.toml (or $CODE_HOME/themes/*.toml) with keys:
@@ -285,13 +243,20 @@ model_reasoning_summary = "detailed"
 - `OPENAI_WIRE_API`: Force the built-in OpenAI provider to use `chat` or `responses` wiring
 
 &ensp;
+## Themes & status text
+
+- **Built-in themes**: switch live via `/theme`.
+- **File-backed themes**: drop `*.toml` into `~/.magik/themes/` (or `$CODE_HOME/themes/`) and they appear in `/theme`.
+- **Custom “spinner verbs” / status phrases**: create `~/.magik/status_texts.json` to override the status text shown with the spinner. See `docs/magic-status-texts-and-spinners.md`.
+
+&ensp;
 ## FAQ
 
 **How is this different from the original?**
-> This fork adds browser integration, multi-agent commands (`/plan`, `/solve`, `/code`), theme system, and enhanced reasoning controls while maintaining full compatibility.
+> Magik is a fork of Every Code and adds multi-account rotation strategies, more UI toggles/shortcuts, customizable status text, and additional theming/UI polish.
 
 **Can I use my existing Codex configuration?**
-> Yes. Every Code uses `~/.magik/` by default and can still read legacy `~/.magic/` or `~/.codex/` files when the new location is missing data. New writes go to `~/.magik/` (or your `CODE_HOME`/`CODEX_HOME` override).
+> Yes. Magik uses `~/.magik/` by default and can still read legacy `~/.magic/` or `~/.codex/` files when the new location is missing data. New writes go to `~/.magik/` (or your `CODE_HOME`/`CODEX_HOME` override).
 
 **Does this work with ChatGPT Plus?**
 > Absolutely. Use the same "Sign in with ChatGPT" flow as the original.
@@ -302,20 +267,13 @@ model_reasoning_summary = "detailed"
 &ensp;
 ## Contributing
 
-We welcome contributions! Every Code maintains compatibility with upstream while adding community-requested features.
+We welcome contributions! Magik aims to stay close to upstream behavior while adding quality-of-life improvements.
 
 ### Development workflow
 
 If you haven't installed Rust yet, run `./scripts/bootstrap-local.sh` first.
 
 ```bash
-# Clone and setup
-git clone https://github.com/just-every/code.git
-cd code
-
-# (Optional) install JS tooling used for repo maintenance
-npm install
-
 # Build (use fast build for development)
 ./build-fast.sh
 
@@ -346,11 +304,11 @@ The `pre-push` hook runs `./pre-release.sh` automatically when pushing to `main`
 ## Legal & Use
 
 ### License & attribution
-- This project is a community fork of `openai/codex` under **Apache-2.0**. We preserve upstream LICENSE and NOTICE files.
-- **Every Code** (Code) is **not** affiliated with, sponsored by, or endorsed by OpenAI.
+- Magik is a fork of Every Code (`just-every/code`), which is a community fork of `openai/codex` under **Apache-2.0**.
+- Magik is **not** affiliated with, sponsored by, or endorsed by OpenAI.
 
 ### Your responsibilities
-Using OpenAI, Anthropic or Google services through Every Code means you agree to **their Terms and policies**. In particular:
+Using OpenAI, Anthropic or Google services through Magik means you agree to **their Terms and policies**. In particular:
 - **Don't** programmatically scrape/extract content outside intended flows.
 - **Don't** bypass or interfere with rate limits, quotas, or safety mitigations.
 - Use your **own** account; don't share or rotate accounts to evade limits.
@@ -361,15 +319,11 @@ Using OpenAI, Anthropic or Google services through Every Code means you agree to
 - Inputs/outputs you send to AI providers are handled under their Terms and Privacy Policy; consult those documents (and any org-level data-sharing settings).
 
 ### Subject to change
-AI providers can change eligibility, limits, models, or authentication flows. Every Code supports **both** ChatGPT sign-in and API-key modes so you can pick what fits (local/hobby vs CI/automation).
+AI providers can change eligibility, limits, models, or authentication flows. Magik supports **both** ChatGPT sign-in and API-key modes so you can pick what fits (local/hobby vs CI/automation).
 
 &ensp;
 ## License
 
 Apache 2.0 - See [LICENSE](LICENSE) file for details.
 
-Every Code is a community fork of the original Codex CLI. We maintain compatibility while adding enhanced features requested by the developer community.
-
-&ensp;
----
-**Need help?** Open an issue on [GitHub](https://github.com/just-every/code/issues) or check our documentation.
+Magik is a fork of Every Code and the original Codex CLI. It aims to stay compatible while adding developer-focused TUI ergonomics.
