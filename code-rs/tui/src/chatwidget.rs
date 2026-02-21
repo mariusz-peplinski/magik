@@ -8151,6 +8151,36 @@ impl ChatWidget<'_> {
             return;
         }
 
+        if let KeyEvent {
+            code: crossterm::event::KeyCode::Char('o'),
+            modifiers: crossterm::event::KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        } = key_event
+        {
+            if !self.bottom_pane.has_active_modal_view() {
+                let text = self.bottom_pane.composer_text();
+                if text.trim().is_empty() {
+                    self.bottom_pane
+                        .flash_footer_notice("Nothing to snatch".to_string());
+                    return;
+                }
+
+                match crate::clipboard_paste::set_clipboard_text(&text) {
+                    Ok(()) => {
+                        self.clear_composer();
+                        self.bottom_pane
+                            .flash_footer_notice("Snatched prompt to clipboard".to_string());
+                    }
+                    Err(err) => {
+                        self.bottom_pane
+                            .flash_footer_notice(format!("Snatch failed: {err}"));
+                    }
+                }
+            }
+            return;
+        }
+
         // Fast-path PageUp/PageDown to scroll the transcript by a viewport at a time.
         if let crossterm::event::KeyEvent {
             code: crossterm::event::KeyCode::PageUp,
@@ -22232,6 +22262,10 @@ Have we met every part of this goal and is there no further work to do?"#
             t_fg.add_modifier(Modifier::BOLD),
         )]));
         lines.push(kv("Enter", "Send message"));
+        lines.push(kv(
+            "Ctrl+O",
+            "Snatch prompt (copy to clipboard + clear)",
+        ));
         lines.push(kv("Ctrl+J", "Insert newline"));
         lines.push(kv("Shift+Enter", "Insert newline"));
         // Split combined shortcuts into separate rows for readability

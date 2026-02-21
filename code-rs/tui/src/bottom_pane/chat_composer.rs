@@ -2545,6 +2545,9 @@ impl ChatComposer {
                     vec![
                         Span::from("Ctrl+G").style(key_hint_style),
                         Span::from(" editor").style(label_style),
+                        Span::from("   ").style(label_style),
+                        Span::from("Ctrl+O").style(key_hint_style),
+                        Span::from(" snatch").style(label_style),
                     ]
                 } else {
                     Vec::new()

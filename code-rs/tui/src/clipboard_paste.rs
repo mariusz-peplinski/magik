@@ -23,6 +23,31 @@ impl std::fmt::Display for PasteImageError {
 }
 impl std::error::Error for PasteImageError {}
 
+#[derive(Debug)]
+pub enum ClipboardTextError {
+    ClipboardUnavailable(String),
+    WriteFailed(String),
+}
+
+impl std::fmt::Display for ClipboardTextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClipboardTextError::ClipboardUnavailable(msg) => write!(f, "clipboard unavailable: {msg}"),
+            ClipboardTextError::WriteFailed(msg) => write!(f, "could not write clipboard text: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for ClipboardTextError {}
+
+pub fn set_clipboard_text(text: &str) -> Result<(), ClipboardTextError> {
+    let mut cb = arboard::Clipboard::new()
+        .map_err(|e| ClipboardTextError::ClipboardUnavailable(e.to_string()))?;
+    cb.set_text(text.to_string())
+        .map_err(|e| ClipboardTextError::WriteFailed(e.to_string()))?;
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncodedImageFormat {
     Png,
