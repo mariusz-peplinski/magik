@@ -7,6 +7,41 @@
 
 - (none)
 
+## [0.6.70] - 2026-02-16
+
+- Core/Search: persist and restore tool selection after search. (02abd9a8)
+- Core/Search: warn when falling back to default metadata and keep selection. (81a2a7eb, 060a320e)
+- Auto Drive: add configurable CLI routing entries. (2be7be99)
+- Linux Sandbox: allow GPU device paths in landlock. (d827c2d8)
+
+## [0.6.69] - 2026-02-15
+
+- TUI/Approvals: show structured network approval prompts with host/protocol context. (31646701, b527ee28, 2bced810)
+- Models: gate gpt-5.3-codex-spark behind pro-only auth capabilities. (d165389f)
+- Core/Auto Drive: add fallback routing when spark hits overflow or usage limits. (7973a790, 2a4c39fd)
+- TUI: preserve remote image attachments across resume and backtrack flows. (26a7cd21)
+
+## [0.6.68] - 2026-02-14
+
+- Auto Drive: add per-turn model routing and rename decision schema. (fb17527)
+- Auto Drive: enforce finish evidence with paste fallback. (46d537e)
+- Auto Drive: require strict decision fields without allOf and align coordinator schema. (e4559ac4, 873604d6)
+- Auto Drive: decouple auto review and cap long-session growth. (60727b0)
+
+## [0.6.67] - 2026-02-13
+
+- Skills: discover .agents and admin roots and remove deep-scan caps. (eff5ad73, 4b1faf08)
+- TUI: improve /model navigation and /resume popup visibility. (3248c705, adc2240d, 33b521b7, 99425efe)
+- App Server: surface JSON-RPC errors to avoid masked auth failures. (8d97b5c2)
+- Sandbox: add slash command to grant read access to inaccessible directories. (5c3ca739)
+
+## [0.6.66] - 2026-02-12
+
+- App Server: add websocket transport and protocol updates. (3ebd8b72)
+- Core/Websocket: bound ingress buffering and unblock spark exec/close readers. (6b6fab16, 1458e477)
+- TUI/Model: surface gpt-5.3-codex-spark in /model. (7d6b5915)
+- Core/JS REPL: add host helpers and exec end events. (466be55a)
+
 ## [0.6.65] - 2026-02-11
 
 - CLI/Env: stop traversing parent .env files at startup. (04c45da1)

@@ -7,23 +7,23 @@ expression: section_open
  |                                Not signed in: usage unavailable                                |
  +------------------------------------------------------------------------------------------------+
  +Settings ▸ Model--------------------------------------------------------------------------------+
- |                                                                                                |
- | ›  Model              + Select Model & Reasoning --------------------------------------------+ |
- |    Theme              |                                                                      | |
- |    Magik Settings     |  Curren+------------------------------+                              | |
- |    Updates            |  Reason|Model Shortcuts               |                              | |
- |    Accounts           |        |                              |                              | |
- |    Agents             |  GPT-5.|• Esc    Return to overview   |                              | |
- |    Prompts            |  Latest|• Tab    Cycle sections       |s across knowledge, reasoning | |
- |    Skills             |     XHi|• Shift+Tab  Cycle backwards  |for complex problems          | |
- |    Auto Drive         |     Hig|• ?      Toggle this help     |r complex or ambiguous proble | |
- |    Review             |     Med|                              |f reasoning depth and latency | |
- |    Planning           |     Low|Press Esc to close            |oning; useful for straightfor | |
- |    Validation         |        +------------------------------+                              | |
- |  ↓ Chrome             +----------------------------------------------------------------------+ |
- | ↑ ↓ Move    Enter Open    Esc Close    ? Help                                                  |
- |                                                                                                |
- +------------------------------------------------------------------------------------------------+
+|                                                                                                |
+| ›  Model              + Select Model & Reasoning --------------------------------------------+ |
+|    Theme              |                                                                      | |
+|    Magik Settings     |  Curren+------------------------------+                              | |
+|    Updates            |  Reason|Model Shortcuts               |                              | |
+|    Accounts           |        |                              |                              | |
+|    Agents             |  GPT-5.|• Esc    Return to overview   |                              | |
+|    Prompts            |  Latest|• Tab    Cycle sections       |s across knowledge, reasoning | |
+|    Skills             |     XHi|• Shift+Tab  Cycle backwards  |for complex problems          | |
+|    Auto Drive         |     Hig|• ?      Toggle this help     |r complex or ambiguous proble | |
+|    Review             |     Med|                              |f reasoning depth and latency | |
+|    Planning           |     Low|Press Esc to close            |oning; useful for straightfor | |
+|    Validation         |        +------------------------------+                              | |
+|  ↓ Chrome             +----------------------------------------------------------------------+ |
+| ↑ ↓ Move    Enter Open    Esc Close    ? Help                                                  |
+|                                                                                                |
++------------------------------------------------------------------------------------------------+
 
  +------------------------------------------------------------------------------------------------+
  | What can I code for you today?                                                                 |

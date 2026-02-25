@@ -1056,6 +1056,9 @@ pub struct ModelListParams {
     /// Optional page size; defaults to a reasonable server-side value.
     #[ts(optional = nullable)]
     pub limit: Option<u32>,
+    /// When true, include models that are hidden from the default picker list.
+    #[ts(optional = nullable)]
+    pub include_hidden: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -1067,6 +1070,7 @@ pub struct Model {
     pub upgrade: Option<String>,
     pub display_name: String,
     pub description: String,
+    pub hidden: bool,
     pub supported_reasoning_efforts: Vec<ReasoningEffortOption>,
     pub default_reasoning_effort: ReasoningEffort,
     #[serde(default = "default_input_modalities")]
@@ -1236,6 +1240,14 @@ pub struct AppInfo {
     pub install_url: Option<String>,
     #[serde(default)]
     pub is_accessible: bool,
+    /// Whether this app is enabled in config.toml.
+    /// Example:
+    /// ```toml
+    /// [apps.bad_app]
+    /// enabled = false
+    /// ```
+    #[serde(default = "default_enabled")]
+    pub is_enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -1631,6 +1643,10 @@ pub struct ThreadListParams {
     /// If false or null, only non-archived threads are returned.
     #[ts(optional = nullable)]
     pub archived: Option<bool>,
+    /// Optional cwd filter; when set, only threads whose session cwd exactly
+    /// matches this path are returned.
+    #[ts(optional = nullable)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]

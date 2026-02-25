@@ -13,6 +13,27 @@ Magik is a fast, local coding agent for your terminal.
 
 This repository is a fork of **Every Code** (`just-every/code`) — and through that lineage, a fork of `openai/codex` — focused on improving day-to-day TUI ergonomics and customization.
 
+&ensp;
+## What's new
+
+- **Latest long-session stability sweep** (post-0.6): Auto Drive and Auto Review are now decoupled so background reviews no longer block the command flow. `Esc` returns control immediately and typing works while review finalization continues.
+
+- **Operational upgrades in this cycle**
+  - Auto Review metadata (branch/worktree context) remains queryable through the active Auto Drive session after completion.
+  - Terminal agents are compacted and archived so heavy payloads are reduced while review linkage is preserved.
+  - Core `core`, coordinator, and TUI state maps now have hard caps with bounded drop/trim behavior.
+  - Auto Drive conversation/update queues are bounded in the coordinator; TUI has bounded prompt/agent/runtime caches.
+  - Background review notes are added as non-blocking history-visible notes instead of foreground task-injection.
+  - TUI housekeeping lifecycle is bounded with deterministic stop control.
+  - Stress tests now cover heavy agent churn plus concurrent Auto Review + Esc/typing responsiveness.
+
+- **New/updated models and agents**
+  - Auto Drive CLI model support includes `gpt-5.3-codex` (planning/problem-solving) and `gpt-5.3-codex-spark` (fast coding/fix loops), with `medium | high | xhigh` reasoning controls.
+  - Frontline and alias-aware agent model handling now includes `code-gpt-5.3-codex` and `code-gpt-5.3-codex-spark`, with compatibility alias upgrades for `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5.2-codex`, etc.
+  - Auto Drive decision schema and coordinator payloads now enforce bounded history while preserving goal and recent context.
+
+  See commit `60727b068` and related Auto Drive hardening commits in git history for details.
+
 ## What’s different in Magik (vs Every Code)
 
 - **Multi‑account overview + rotation strategies**: a clearer limits UI plus multiple rotation modes (Manual / On limit / Even usage / Step 45% / Reset‑based).

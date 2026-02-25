@@ -25,6 +25,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 
 use codex_network_proxy::NetworkProxy;
@@ -42,8 +43,7 @@ mod head_tail_buffer;
 mod process;
 mod process_manager;
 
-#[cfg(any(test, feature = "test-support"))]
-pub fn set_deterministic_process_ids_for_tests(enabled: bool) {
+pub(crate) fn set_deterministic_process_ids_for_tests(enabled: bool) {
     process_manager::set_deterministic_process_ids_for_tests(enabled);
 }
 
@@ -145,6 +145,8 @@ struct ProcessEntry {
     process_id: String,
     command: Vec<String>,
     tty: bool,
+    network_attempt_id: Option<String>,
+    session: Weak<Session>,
     last_used: tokio::time::Instant,
 }
 
