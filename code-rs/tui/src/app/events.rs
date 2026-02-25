@@ -950,6 +950,12 @@ impl App<'_> {
                     }
                     self.config.tui.rounded_corners = enabled;
                 }
+                AppEvent::SetTuiAutoReviewSymbolsOnly(enabled) => {
+                    if let AppState::Chat { widget } = &mut self.app_state {
+                        widget.set_auto_review_symbols_only(enabled);
+                    }
+                    self.config.tui.auto_review_symbols_only = enabled;
+                }
                 AppEvent::ShowAutoDriveSettings => {
                     if let AppState::Chat { widget } = &mut self.app_state {
                         widget.show_auto_drive_settings();

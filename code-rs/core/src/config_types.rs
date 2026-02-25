@@ -750,6 +750,10 @@ pub struct Tui {
     #[serde(default = "default_true")]
     pub auto_review_enabled: bool,
 
+    /// Render Auto Review status as symbols only in the composer footer.
+    #[serde(default)]
+    pub auto_review_symbols_only: bool,
+
     /// Capture Git ghost snapshots for `/undo` and snapshot-scoped review flows.
     #[serde(default = "default_true")]
     pub git_snapshots_enabled: bool,
@@ -777,6 +781,7 @@ impl Default for Tui {
             alternate_screen: true,
             review_auto_resolve: true,
             auto_review_enabled: true,
+            auto_review_symbols_only: false,
             git_snapshots_enabled: true,
         }
     }

@@ -114,6 +114,18 @@ pub(crate) enum AgentHintLabel {
     Review,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TerminalFooterMeta {
+    pub(crate) model: String,
+    pub(crate) reasoning: String,
+    pub(crate) cwd: String,
+    pub(crate) branch: Option<String>,
+    pub(crate) account_label: Option<String>,
+    pub(crate) usage_icon: Option<char>,
+    pub(crate) hourly_percent: Option<u8>,
+    pub(crate) weekly_percent: Option<u8>,
+}
+
 // Format an integer with thousands separators (e.g., 125,654).
 fn format_with_thousands(n: u64) -> String {
     let s = n.to_string();
@@ -161,6 +173,7 @@ pub(crate) struct ChatComposer {
     standard_terminal_hint: Option<String>,
     // Auto Review status displayed in the footer
     auto_review_status: Option<AutoReviewFooterStatus>,
+    auto_review_symbols_only: bool,
     // Agent hint label to display alongside Auto Review footer state
     agent_hint_label: AgentHintLabel,
     // Persistent/ephemeral access-mode indicator shown on the left
@@ -179,6 +192,8 @@ pub(crate) struct ChatComposer {
     paste_burst: PasteBurst,
     post_paste_space_guard: Option<PostPasteSpaceGuard>,
     footer_hint_override: Option<Vec<(String, String)>>,
+    standard_terminal_mode: bool,
+    terminal_footer_meta: TerminalFooterMeta,
     embedded_mode: bool,
     render_mode: ComposerRenderMode,
     auto_drive_active: bool,
@@ -361,6 +376,7 @@ impl ChatComposer {
             footer_notice: None,
             standard_terminal_hint: None,
             auto_review_status: None,
+            auto_review_symbols_only: false,
             agent_hint_label: AgentHintLabel::Agents,
             access_mode_label: None,
             access_mode_label_expiry: None,
@@ -372,6 +388,8 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             post_paste_space_guard: None,
             footer_hint_override: None,
+            standard_terminal_mode: false,
+            terminal_footer_meta: TerminalFooterMeta::default(),
             embedded_mode: false,
             render_mode: ComposerRenderMode::Full,
             auto_drive_active: false,
@@ -391,6 +409,10 @@ impl ChatComposer {
 
     pub(crate) fn set_agent_hint_label(&mut self, label: AgentHintLabel) {
         self.agent_hint_label = label;
+    }
+
+    pub(crate) fn set_auto_review_symbols_only(&mut self, enabled: bool) {
+        self.auto_review_symbols_only = enabled;
     }
 
     #[cfg(test)]
@@ -505,6 +527,14 @@ impl ChatComposer {
 
     pub(crate) fn has_footer_hint_override(&self) -> bool {
         self.footer_hint_override.is_some()
+    }
+
+    pub(crate) fn set_standard_terminal_mode(&mut self, enabled: bool) {
+        self.standard_terminal_mode = enabled;
+    }
+
+    pub(crate) fn set_terminal_footer_meta(&mut self, meta: TerminalFooterMeta) {
+        self.terminal_footer_meta = meta;
     }
 
     /// Show a footer notice for a specific duration.
@@ -2200,6 +2230,274 @@ impl ChatComposer {
         spans
     }
 
+    fn context_used_percent(&self) -> Option<u8> {
+        let token_usage_info = self.token_usage_info.as_ref()?;
+        let context_window = token_usage_info.model_context_window?;
+        if context_window == 0 {
+            return None;
+        }
+        let tokens_used = token_usage_info.last_token_usage.tokens_in_context_window();
+        let used = (tokens_used as f32 / context_window as f32) * 100.0;
+        Some(used.clamp(0.0, 100.0).round() as u8)
+    }
+
+    fn tokens_used_count(&self) -> Option<u64> {
+        self.token_usage_info
+            .as_ref()
+            .map(|info| info.last_token_usage.tokens_in_context_window())
+    }
+
+    fn shortcut_action_spans(
+        action: &str,
+        key: &str,
+        label_style: Style,
+        key_style: Style,
+    ) -> Vec<Span<'static>> {
+        let action = action.to_ascii_lowercase();
+        let key = key.to_ascii_lowercase();
+        if key.chars().count() == 1 {
+            let key_char = key.chars().next().unwrap_or_default();
+            if let Some((idx, ch)) = action
+                .char_indices()
+                .find(|(_, ch)| ch.to_ascii_lowercase() == key_char)
+            {
+                let mut spans = Vec::new();
+                if idx > 0 {
+                    spans.push(Span::from(action[..idx].to_string()).style(label_style));
+                }
+                spans.push(Span::from(ch.to_string()).style(key_style));
+                let next_idx = idx + ch.len_utf8();
+                if next_idx < action.len() {
+                    spans.push(Span::from(action[next_idx..].to_string()).style(label_style));
+                }
+                return spans;
+            }
+        }
+
+        vec![
+            Span::from(action).style(label_style),
+            Span::from(" ").style(label_style),
+            Span::from(key).style(key_style),
+        ]
+    }
+
+    fn render_standard_terminal_footer(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        key_hint_style: Style,
+        label_style: Style,
+    ) {
+        let separator = Span::from(" · ").style(label_style);
+        let separator_len = separator.content.chars().count();
+        let span_len = |spans: &[Span<'static>]| -> usize {
+            spans.iter().map(|span| span.content.chars().count()).sum()
+        };
+
+        let mut left_sections: Vec<(u8, Vec<Span<'static>>, bool)> = Vec::new();
+        let mut right_sections: Vec<(u8, Vec<Span<'static>>, bool)> = Vec::new();
+
+        if let Some(status) = self.auto_review_status {
+            let (status_spans, _) = Self::auto_review_footer_sections(
+                status,
+                self.agent_hint_label,
+                self.auto_review_symbols_only,
+            );
+            if !status_spans.is_empty() {
+                left_sections.push((1, status_spans, true));
+            }
+        }
+
+        if let Some(branch) = self
+            .terminal_footer_meta
+            .branch
+            .as_ref()
+            .filter(|branch| !branch.trim().is_empty())
+        {
+            left_sections.push((1, vec![Span::styled(
+                branch.to_string(),
+                Style::default().fg(crate::colors::success_green()),
+            )], true));
+        }
+
+        if !self.terminal_footer_meta.model.trim().is_empty() {
+            left_sections.push((2, Self::shortcut_action_spans(
+                &format!("model: {}", self.terminal_footer_meta.model),
+                "y",
+                label_style,
+                key_hint_style,
+            ), true));
+        }
+
+        if !self.terminal_footer_meta.reasoning.trim().is_empty() {
+            left_sections.push((2, Self::shortcut_action_spans(
+                self.terminal_footer_meta.reasoning.as_str(),
+                "n",
+                label_style,
+                key_hint_style,
+            ), true));
+        }
+
+        let usage_icon = self.terminal_footer_meta.usage_icon.unwrap_or('?');
+        let account = self
+            .terminal_footer_meta
+            .account_label
+            .as_deref()
+            .unwrap_or("anon");
+        left_sections.push((3, vec![
+            Span::styled(usage_icon.to_string(), key_hint_style),
+            Span::from(" ").style(label_style),
+            Span::from(account.to_string()).style(label_style),
+        ], true));
+
+        if let Some(tokens_used) = self.tokens_used_count() {
+            left_sections.push((5, vec![
+                Span::from(format_with_thousands(tokens_used)).style(label_style),
+                Span::from(" tok").style(label_style),
+            ], true));
+        }
+
+        if let Some(context_used) = self.context_used_percent() {
+            left_sections.push((4, vec![
+                Span::from(context_used.to_string()).style(key_hint_style),
+                Span::from("% context").style(label_style),
+            ], true));
+        }
+
+        let hourly = self
+            .terminal_footer_meta
+            .hourly_percent
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "--".to_string());
+        let weekly = self
+            .terminal_footer_meta
+            .weekly_percent
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "--".to_string());
+        left_sections.push((6, vec![
+            Span::from(format!("{hourly}|{weekly}")).style(label_style),
+        ], true));
+
+        if !self.terminal_footer_meta.cwd.trim().is_empty() {
+            left_sections.push((7, vec![
+                Span::from(self.terminal_footer_meta.cwd.clone()).style(label_style),
+            ], true));
+        }
+
+        right_sections.push((3, Self::shortcut_action_spans("ui", "t", label_style, key_hint_style), true));
+        right_sections.push((4, Self::shortcut_action_spans("edit", "g", label_style, key_hint_style), true));
+        right_sections.push((4, Self::shortcut_action_spans("yoink", "o", label_style, key_hint_style), true));
+        right_sections.push((5, Self::shortcut_action_spans("clear", "l", label_style, key_hint_style), true));
+
+        let assemble_sections = |
+            sections: &[(u8, Vec<Span<'static>>, bool)],
+        | -> (Vec<Span<'static>>, usize) {
+            let mut assembled: Vec<Span<'static>> = Vec::new();
+            let mut len = 0usize;
+            for (_, section, include) in sections {
+                if !*include || section.is_empty() {
+                    continue;
+                }
+                if !assembled.is_empty() {
+                    assembled.push(separator.clone());
+                    len += separator_len;
+                }
+                assembled.extend(section.clone());
+                len += span_len(section);
+            }
+            (assembled, len)
+        };
+
+        let total_width = area.width as usize;
+        let trailing_pad = 1usize;
+        let mut left_state = left_sections;
+        let mut right_state = right_sections;
+
+        let (mut left_spans, mut left_len, mut right_spans, right_len) = loop {
+            let (left_spans, left_len) = assemble_sections(&left_state);
+            let (right_spans, right_len) = assemble_sections(&right_state);
+            if left_len + right_len + trailing_pad <= total_width {
+                break (left_spans, left_len, right_spans, right_len);
+            }
+
+            let next_left = left_state
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, _, include))| *include)
+                .max_by_key(|(_, (priority, _, _))| *priority)
+                .map(|(idx, _)| idx);
+            let next_right = right_state
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, _, include))| *include)
+                .max_by_key(|(_, (priority, _, _))| *priority)
+                .map(|(idx, _)| idx);
+
+            match (next_left, next_right) {
+                (Some(left_idx), Some(right_idx)) => {
+                    if right_state[right_idx].0 >= left_state[left_idx].0 {
+                        right_state[right_idx].2 = false;
+                    } else {
+                        left_state[left_idx].2 = false;
+                    }
+                }
+                (Some(left_idx), None) => left_state[left_idx].2 = false,
+                (None, Some(right_idx)) => right_state[right_idx].2 = false,
+                (None, None) => break (left_spans, left_len, right_spans, right_len),
+            }
+        };
+
+        if left_len + right_len + trailing_pad > total_width {
+            let mut remaining = total_width.saturating_sub(right_len + trailing_pad);
+            let mut truncated: Vec<Span<'static>> = Vec::new();
+            for span in &left_spans {
+                if remaining == 0 {
+                    break;
+                }
+                let current = span.content.chars().count();
+                if current <= remaining {
+                    truncated.push(span.clone());
+                    remaining -= current;
+                    continue;
+                }
+
+                if remaining <= 1 {
+                    truncated.push(Span::from("…").style(span.style));
+                    remaining = 0;
+                } else {
+                    let mut collected: String = span.content.chars().take(remaining).collect();
+                    if !collected.is_empty() {
+                        collected.pop();
+                    }
+                    collected.push('…');
+                    truncated.push(Span::from(collected).style(span.style));
+                    remaining = 0;
+                }
+            }
+            left_spans = truncated;
+            left_len = span_len(&left_spans);
+        }
+
+        let spacer = if total_width > left_len + right_len + trailing_pad {
+            " ".repeat(total_width - left_len - right_len - trailing_pad)
+        } else {
+            String::from(" ")
+        };
+
+        let mut line_spans = left_spans;
+        line_spans.push(Span::from(spacer));
+        line_spans.append(&mut right_spans);
+        line_spans.push(Span::from(" "));
+
+        Line::from(line_spans)
+            .style(
+                Style::default()
+                    .fg(crate::colors::text_dim())
+                    .add_modifier(Modifier::DIM),
+            )
+            .render_ref(area, buf);
+    }
+
     fn build_auto_drive_hint_spans(
         text: &str,
         key_style: Style,
@@ -2263,70 +2561,48 @@ impl ChatComposer {
     fn auto_review_footer_sections(
         status: AutoReviewFooterStatus,
         agent_hint_label: AgentHintLabel,
+        symbols_only: bool,
     ) -> (Vec<Span<'static>>, Vec<Span<'static>>) {
         let key_hint_style = Style::default().fg(crate::colors::function());
         let label_style = Style::default().fg(crate::colors::text_dim());
 
-        let agent_hint_label_text = match agent_hint_label {
-            AgentHintLabel::Review => " show review",
-            AgentHintLabel::Agents => " show agents",
+        let agent_hint_action = match agent_hint_label {
+            AgentHintLabel::Review => "review",
+            AgentHintLabel::Agents => "agents",
         };
 
-        let agent_hint_spans = vec![
-            Span::styled("Ctrl+A", key_hint_style),
-            Span::from(agent_hint_label_text).style(label_style),
-        ];
+        let agent_hint_spans =
+            Self::shortcut_action_spans(agent_hint_action, "a", label_style, key_hint_style);
 
-        let status_spans = match status.status {
-            AutoReviewIndicatorStatus::Running => {
-                let phase_label = match status.phase {
-                    AutoReviewPhase::Resolving => "Auto Review: Resolving",
-                    AutoReviewPhase::Reviewing => "Auto Review: Reviewing",
-                };
-                let status_style = key_hint_style;
-                vec![
-                    Span::styled("Auto Review: ", label_style),
-                    Span::styled("•", status_style),
-                    Span::from(" "),
-                    Span::styled(
-                        phase_label.trim_start_matches("Auto Review: "),
-                        status_style,
-                    ),
-                ]
-            }
-            AutoReviewIndicatorStatus::Clean => {
-                let icon_style = key_hint_style;
-                vec![
-                    Span::styled("Auto Review: ", label_style),
-                    Span::styled("✔", icon_style),
-                    Span::from(" "),
-                    Span::styled("Correct", icon_style),
-                ]
-            }
-            AutoReviewIndicatorStatus::Fixed => {
-                let icon_style = Style::default().fg(crate::colors::success());
-                let text = if let Some(count) = status.findings {
-                    let plural = if count == 1 { "Issue" } else { "Issues" };
-                    format!("{count} {plural} Fixed")
-                } else {
-                    "Issues Fixed".to_string()
-                };
-                vec![
-                    Span::styled("Auto Review: ", label_style),
-                    Span::styled("✔", icon_style),
-                    Span::from(" "),
-                    Span::styled(text, icon_style),
-                ]
-            }
-            AutoReviewIndicatorStatus::Failed => {
-                let icon_style = Style::default().fg(crate::colors::error());
-                vec![
-                    Span::styled("Auto Review: ", label_style),
-                    Span::styled("✖", icon_style),
-                    Span::from(" "),
-                    Span::styled("Failed", icon_style),
-                ]
-            }
+        let (icon, label, style) = match status.status {
+            AutoReviewIndicatorStatus::Running => (
+                '⊖',
+                match status.phase {
+                    AutoReviewPhase::Resolving => "reviewing",
+                    AutoReviewPhase::Reviewing => "reviewing",
+                },
+                Style::default().fg(crate::colors::text()),
+            ),
+            AutoReviewIndicatorStatus::Clean | AutoReviewIndicatorStatus::Fixed => (
+                '⊚',
+                "correct",
+                Style::default().fg(crate::colors::success()),
+            ),
+            AutoReviewIndicatorStatus::Failed => (
+                '⊗',
+                "failed",
+                Style::default().fg(crate::colors::error()),
+            ),
+        };
+
+        let status_spans = if symbols_only {
+            vec![Span::styled(icon.to_string(), style)]
+        } else {
+            vec![
+                Span::styled(icon.to_string(), style),
+                Span::from(" "),
+                Span::styled(label.to_string(), style),
+            ]
         };
 
         (status_spans, agent_hint_spans)
@@ -2364,6 +2640,11 @@ impl ChatComposer {
 
                 let key_hint_style = Style::default().fg(crate::colors::function());
                 let label_style = Style::default().fg(crate::colors::text_dim());
+
+                if self.standard_terminal_mode && !self.auto_drive_active {
+                    self.render_standard_terminal_footer(area, buf, key_hint_style, label_style);
+                    return;
+                }
 
                 if let Some(hints) = &self.footer_hint_override {
                     let mut left_spans: Vec<Span<'static>> = vec![Span::from("  ")];
@@ -2415,7 +2696,11 @@ impl ChatComposer {
                 let mut auto_review_agent_hint: Vec<Span<'static>> = Vec::new();
                 if let Some(status) = self.auto_review_status {
                     let (status_spans, agent_hint_spans) =
-                        Self::auto_review_footer_sections(status, self.agent_hint_label);
+                        Self::auto_review_footer_sections(
+                            status,
+                            self.agent_hint_label,
+                            self.auto_review_symbols_only,
+                        );
                     auto_review_status_spans = status_spans;
                     auto_review_agent_hint = agent_hint_spans;
                 }
@@ -2448,8 +2733,8 @@ impl ChatComposer {
                         };
                         if show_suffix {
                             left_misc_before_ctrlc.push(Span::from("  (").style(label_style));
-                            left_misc_before_ctrlc.push(Span::from("Shift+Tab").style(key_hint_style));
-                            left_misc_before_ctrlc.push(Span::from(" change)").style(label_style));
+                            left_misc_before_ctrlc.push(Span::from("Stab").style(key_hint_style));
+                            left_misc_before_ctrlc.push(Span::from(" mode)").style(label_style));
                         }
                     }
                 }
@@ -2460,8 +2745,12 @@ impl ChatComposer {
                     if !left_misc_before_ctrlc.is_empty() {
                         ctrl_c_spans.push(Span::from("   "));
                     }
-                    ctrl_c_spans.push(Span::from("Ctrl+C").style(key_hint_style));
-                    ctrl_c_spans.push(Span::from(" again to quit").style(label_style));
+                    ctrl_c_spans.extend(Self::shortcut_action_spans(
+                        "quit",
+                        "c",
+                        label_style,
+                        key_hint_style,
+                    ));
                 }
                 let ctrl_c_present = !ctrl_c_spans.is_empty();
 
@@ -2542,13 +2831,28 @@ impl ChatComposer {
 
                 // Editor hint (priority 4) — only when not auto-drive and not showing quit hint
                 let editor_spans: Vec<Span<'static>> = if !self.auto_drive_active && !self.ctrl_c_quit_hint {
-                    vec![
-                        Span::from("Ctrl+G").style(key_hint_style),
-                        Span::from(" editor").style(label_style),
-                        Span::from("   ").style(label_style),
-                        Span::from("Ctrl+O").style(key_hint_style),
-                        Span::from(" snatch").style(label_style),
-                    ]
+                    let mut spans = Vec::new();
+                    spans.extend(Self::shortcut_action_spans(
+                        "edit",
+                        "g",
+                        label_style,
+                        key_hint_style,
+                    ));
+                    spans.push(Span::from("   ").style(label_style));
+                    spans.extend(Self::shortcut_action_spans(
+                        "yoink",
+                        "o",
+                        label_style,
+                        key_hint_style,
+                    ));
+                    spans.push(Span::from("   ").style(label_style));
+                    spans.extend(Self::shortcut_action_spans(
+                        "clear",
+                        "l",
+                        label_style,
+                        key_hint_style,
+                    ));
+                    spans
                 } else {
                     Vec::new()
                 };

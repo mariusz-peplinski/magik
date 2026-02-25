@@ -682,6 +682,7 @@ pub(crate) enum AppEvent {
     SetTuiShowExploreDetails(bool),
     SetTuiShowBlockTypeLabels(bool),
     SetTuiRoundedCorners(bool),
+    SetTuiAutoReviewSymbolsOnly(bool),
     RequestAgentInstall { name: String, selected_index: usize },
     AgentsOverviewSelectionChanged { index: usize },
     /// Add or update an agent's settings (enabled, params, instructions)

@@ -16,6 +16,7 @@ pub(crate) struct MagicSettingsView {
     show_explore_details: bool,
     show_block_type_labels: bool,
     rounded_corners: bool,
+    auto_review_symbols_only: bool,
     is_complete: bool,
 }
 
@@ -26,6 +27,7 @@ impl MagicSettingsView {
         show_explore_details: bool,
         show_block_type_labels: bool,
         rounded_corners: bool,
+        auto_review_symbols_only: bool,
     ) -> Self {
         Self {
             app_event_tx,
@@ -34,12 +36,13 @@ impl MagicSettingsView {
             show_explore_details,
             show_block_type_labels,
             rounded_corners,
+            auto_review_symbols_only,
             is_complete: false,
         }
     }
 
     fn option_count() -> usize {
-        5
+        6
     }
 
     fn close(&mut self) {
@@ -70,13 +73,21 @@ impl MagicSettingsView {
             .send(AppEvent::SetTuiRoundedCorners(self.rounded_corners));
     }
 
+    fn toggle_auto_review_symbols_only(&mut self) {
+        self.auto_review_symbols_only = !self.auto_review_symbols_only;
+        self.app_event_tx.send(AppEvent::SetTuiAutoReviewSymbolsOnly(
+            self.auto_review_symbols_only,
+        ));
+    }
+
     fn activate_selected(&mut self) {
         match self.selected_index {
             0 => self.toggle_show_reasoning(),
             1 => self.toggle_show_explore_details(),
             2 => self.toggle_show_block_type_labels(),
             3 => self.toggle_rounded_corners(),
-            4 => self.close(),
+            4 => self.toggle_auto_review_symbols_only(),
+            5 => self.close(),
             _ => {}
         }
     }
@@ -156,9 +167,22 @@ impl MagicSettingsView {
             ),
         ]));
 
+        lines.push(row_toggle(
+            4,
+            "Auto review symbols",
+            self.auto_review_symbols_only,
+        ));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                "Show only status symbols for Auto Review footer updates.",
+                dim,
+            ),
+        ]));
+
         lines.push(Line::from(""));
 
-        let close_selected = self.selected_index == 4;
+        let close_selected = self.selected_index == 5;
         let close_style = if close_selected { highlight } else { normal };
         let indicator = if close_selected { ">" } else { " " };
         lines.push(Line::from(vec![

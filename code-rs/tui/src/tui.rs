@@ -4,6 +4,7 @@ use std::io::Stdout;
 use std::io::stdout;
 use std::io::BufWriter;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use code_core::config::Config;
 use crossterm::cursor::MoveTo;
@@ -20,6 +21,7 @@ use crossterm::style::{Color as CtColor, SetBackgroundColor, SetForegroundColor}
 use crossterm::style::Print;
 use crossterm::style::ResetColor;
 use crossterm::cursor::MoveToNextLine;
+use crossterm::cursor::MoveToColumn;
 use crossterm::terminal::Clear;
 use crossterm::terminal::ClearType;
 use ratatui::Terminal;
@@ -34,6 +36,8 @@ use std::os::fd::AsRawFd;
 
 /// A type alias for the terminal type used in this application
 pub type Tui = Terminal<CrosstermBackend<BufWriter<Stdout>>>;
+
+static ALT_SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Terminal information queried at startup
 #[derive(Clone)]
@@ -104,6 +108,7 @@ pub fn init(config: &Config) -> Result<(Tui, TerminalInfo)> {
 
     // Enter alternate screen mode for full screen TUI
     execute!(stdout(), crossterm::terminal::EnterAlternateScreen)?;
+    ALT_SCREEN_ACTIVE.store(true, Ordering::SeqCst);
 
     // Query terminal capabilities and font size after entering alternate screen
     // but before enabling raw mode
@@ -242,11 +247,18 @@ pub fn restore() -> Result<()> {
     let _ = execute!(stdout(), DisableFocusChange);
     execute!(stdout(), DisableMouseCapture)?;
     disable_raw_mode()?;
-    // Leave alternate screen mode
-    execute!(stdout(), crossterm::terminal::LeaveAlternateScreen)?;
-    // Reset colors and move to a fresh line so the shell prompt doesn't
-    // overlap any residual UI.
-    execute!(stdout(), ResetColor, MoveToNextLine(1))?;
+    let was_alt_screen = ALT_SCREEN_ACTIVE.swap(false, Ordering::SeqCst);
+    if was_alt_screen {
+        execute!(stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+        // Leaving the alternate screen restores the previous shell buffer; move
+        // to a fresh line so the prompt doesn't overlap restored output.
+        execute!(stdout(), ResetColor, MoveToNextLine(1))?;
+    } else {
+        // In standard-terminal mode we already render in the normal buffer.
+        // Keep the cursor on the current row to avoid appending an empty line
+        // on every launch/exit cycle.
+        execute!(stdout(), ResetColor, MoveToColumn(0))?;
+    }
     Ok(())
 }
 
@@ -269,6 +281,7 @@ pub fn leave_alt_screen_only() -> Result<()> {
         let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
     }
     execute!(stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+    ALT_SCREEN_ACTIVE.store(false, Ordering::SeqCst);
     Ok(())
 }
 
@@ -300,6 +313,7 @@ pub fn enter_alt_screen_only(theme_fg: ratatui::style::Color, theme_bg: ratatui:
         crossterm::terminal::SetTitle("Code"),
         crossterm::terminal::EnableLineWrap
     )?;
+    ALT_SCREEN_ACTIVE.store(true, Ordering::SeqCst);
     Ok(())
 }
 

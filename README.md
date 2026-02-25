@@ -119,13 +119,42 @@ magik
 
 ### Keyboard shortcuts
 
-- `Ctrl+Y` — switch session model
-- `Ctrl+N` — cycle reasoning level for the current model (wraps)
-- `Ctrl+R` — toggle reasoning visibility
-- `Ctrl+E` — toggle “explore details” (tool-call details and other deep UI panels)
-- `Ctrl+Shift+Y` — toggle mouse capture (helps with text selection)
+`[Magik]` marks shortcuts that were added or expanded in this fork.
 
-The TUI header shows `Model` and `Reasoning` along with the `Ctrl+Y` / `Ctrl+N` hints, and the title reads `Magik Code`.
+- `F1` — open keyboard help
+- `Ctrl+T` — toggle full UI / standard terminal mode
+- `Ctrl+Y` — switch session model
+- `Ctrl+N` — cycle reasoning level for the current model (`[Magik]`)
+- `Ctrl+R` — toggle reasoning visibility
+- `Ctrl+E` — toggle explore/tool detail rendering (`[Magik]`)
+- `Ctrl+D` — toggle diff viewer
+- `Ctrl+Shift+Y` — toggle mouse capture (`[Magik]`)
+- `Esc` — close popups; when composer is empty, starts message backtrack/edit flow
+- `Esc` or `Ctrl+C` — stop the running task
+- `Ctrl+C` twice — quit the app
+- `Ctrl+G` — open external editor for composer text
+- `Ctrl+O` — copy composer text to clipboard and clear it (`[Magik]`)
+- `Ctrl+L` — clear composer text (`[Magik]`)
+- `Ctrl+A` — open/toggle agents terminal (`[Magik]`)
+- `Ctrl+B` — toggle browser overlay (`[Magik]`)
+- `Shift+Tab` — rotate access mode (read-only / write with approval / full)
+- `Enter` — submit composer text
+- `Ctrl+J` or `Shift+Enter` — insert newline in composer
+- `Shift+Up` / `Shift+Down` — browse composer history
+- `Ctrl+B` / `Ctrl+F` — move cursor left/right in composer
+- `Alt+Left` / `Alt+Right` — move cursor by word
+- `Ctrl+W` — delete previous word
+- `Ctrl+H` — delete previous character
+- `Ctrl+D` — delete next character (when editing composer text)
+- `Ctrl+Backspace` — clear current composer line
+- `Ctrl+U` / `Ctrl+K` — delete to line start/end
+- `Home` / `End` — jump to line start/end (or history top/bottom when composer is empty)
+
+Terminal command shortcuts inside composer:
+
+- `$` — open shell terminal overlay
+- `$ <command>` — run shell command immediately
+- `$$ <prompt>` — ask for guided shell command assistance
 
 ## CLI reference
 

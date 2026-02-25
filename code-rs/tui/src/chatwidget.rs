@@ -875,6 +875,7 @@ const RESUME_PLACEHOLDER_MESSAGE: &str = "Resuming previous session...";
 const RESUME_NO_HISTORY_NOTICE: &str =
     "No saved messages for this session. Start typing to continue.";
 const ENABLE_WARP_STRIPES: bool = false;
+const STANDARD_TERMINAL_LOGO_ART: &str = include_str!("../assets/logo.txt");
 
 fn auto_continue_from_config(mode: AutoDriveContinueMode) -> AutoContinueMode {
     match mode {
@@ -937,6 +938,7 @@ use crate::bottom_pane::validation_settings_view::{GroupStatus, ToolRow};
 use crate::bottom_pane::model_selection_view::ModelSelectionTarget;
 use crate::bottom_pane::BottomPane;
 use crate::bottom_pane::BottomPaneParams;
+use crate::bottom_pane::TerminalFooterMeta;
 use crate::bottom_pane::{UndoTimelineEntry, UndoTimelineEntryKind, UndoTimelineView};
 use crate::bottom_pane::CancellationEvent;
 use crate::bottom_pane::InputResult;
@@ -6770,6 +6772,8 @@ impl ChatWidget<'_> {
         w.auto_state.reset_countdown();
         w.auto_goal_escape_state = AutoGoalEscState::Inactive;
         w.set_standard_terminal_mode(!config.tui.alternate_screen);
+        w.bottom_pane
+            .set_auto_review_symbols_only(w.config.tui.auto_review_symbols_only);
         if config.experimental_resume.is_none() {
             if !w.test_mode {
                 w.history_push_top_next_req(history_cell::new_animated_welcome()); // tag: prelude
@@ -6800,6 +6804,10 @@ impl ChatWidget<'_> {
             w.bottom_pane.update_status_text(String::new());
             #[cfg(any(test, feature = "test-helpers"))]
             w.seed_test_mode_greeting();
+        }
+
+        if w.standard_terminal_mode && !w.test_mode {
+            w.emit_standard_terminal_startup_banner();
         }
 
         if !w.test_mode {
@@ -7149,6 +7157,8 @@ impl ChatWidget<'_> {
             }
         }
         w.set_standard_terminal_mode(!config.tui.alternate_screen);
+        w.bottom_pane
+            .set_auto_review_symbols_only(w.config.tui.auto_review_symbols_only);
         if show_welcome && !w.test_mode {
             w.history_push_top_next_req(history_cell::new_animated_welcome());
         }
@@ -7157,6 +7167,10 @@ impl ChatWidget<'_> {
             w.bottom_pane.update_status_text(String::new());
             #[cfg(any(test, feature = "test-helpers"))]
             w.seed_test_mode_greeting();
+        }
+
+        if w.standard_terminal_mode && !w.test_mode {
+            w.emit_standard_terminal_startup_banner();
         }
 
         if !w.test_mode {
@@ -7744,7 +7758,46 @@ impl ChatWidget<'_> {
         }
     }
 
+    fn standard_terminal_startup_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        let logo_style = Style::default()
+            .fg(ratatui::style::Color::Rgb(255, 20, 147))
+            .add_modifier(Modifier::BOLD);
+        for raw_line in STANDARD_TERMINAL_LOGO_ART.lines() {
+            let line = raw_line.trim_end_matches('\r').to_string();
+            lines.push(Line::from(Span::styled(line, logo_style)));
+        }
+
+        let title_style = Style::default().fg(crate::colors::text()).add_modifier(Modifier::BOLD);
+        let byline_style = Style::default().fg(crate::colors::text_dim());
+        let heart_style = Style::default()
+            .fg(ratatui::style::Color::Rgb(255, 20, 147))
+            .add_modifier(Modifier::BOLD);
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("magik code v{}", code_version::version()),
+            title_style,
+        )));
+        lines.push(Line::from(vec![
+            Span::styled("made by @mariusz-peplinski ", byline_style),
+            Span::styled("<3", heart_style),
+        ]));
+        lines.push(Line::from(""));
+
+        lines
+    }
+
+    fn emit_standard_terminal_startup_banner(&self) {
+        if !self.standard_terminal_mode {
+            return;
+        }
+        self.app_event_tx
+            .send(AppEvent::InsertHistory(self.standard_terminal_startup_lines()));
+    }
+
     /// Format model name with proper capitalization (e.g., "gpt-4" -> "GPT-4")
+    #[cfg(test)]
     fn format_model_name(&self, model_name: &str) -> String {
         fn format_segment(segment: &str) -> String {
             if segment.eq_ignore_ascii_case("codex") {
@@ -8203,6 +8256,26 @@ impl ChatWidget<'_> {
                         self.bottom_pane
                             .flash_footer_notice(format!("Snatch failed: {err}"));
                     }
+                }
+            }
+            return;
+        }
+
+        if let KeyEvent {
+            code: crossterm::event::KeyCode::Char('l'),
+            modifiers: crossterm::event::KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press | KeyEventKind::Repeat,
+            ..
+        } = key_event
+        {
+            if !self.bottom_pane.has_active_modal_view() {
+                if self.bottom_pane.composer_is_empty() {
+                    self.bottom_pane
+                        .flash_footer_notice("Input already empty".to_string());
+                } else {
+                    self.clear_composer();
+                    self.bottom_pane
+                        .flash_footer_notice("Input cleared".to_string());
                 }
             }
             return;
@@ -15579,7 +15652,82 @@ impl ChatWidget<'_> {
     }
 
     fn request_redraw(&mut self) {
+        self.refresh_terminal_footer_meta();
         self.app_event_tx.send(AppEvent::RequestRedraw);
+    }
+
+    fn refresh_terminal_footer_meta(&mut self) {
+        if !self.standard_terminal_mode {
+            return;
+        }
+        self.bottom_pane
+            .set_terminal_footer_meta(self.build_terminal_footer_meta());
+    }
+
+    fn build_terminal_footer_meta(&self) -> TerminalFooterMeta {
+        use crate::exec_command::relativize_to_home;
+
+        let cwd = match relativize_to_home(&self.config.cwd) {
+            Some(rel) if !rel.as_os_str().is_empty() => format!("~/{}", rel.display()),
+            Some(_) => "~".to_string(),
+            None => self.config.cwd.display().to_string(),
+        }
+        .to_ascii_lowercase();
+
+        let account_label = auth_accounts::get_active_account_id(&self.config.code_home)
+            .ok()
+            .flatten()
+            .and_then(|id| auth_accounts::find_account(&self.config.code_home, &id).ok())
+            .flatten()
+            .and_then(|account| {
+                account
+                    .tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.id_token.email.clone())
+                    .filter(|email| !email.trim().is_empty())
+                    .or_else(|| Some(account_display_label(&account)))
+            })
+            .map(|label| {
+                label
+                    .chars()
+                    .filter(|ch| !ch.is_whitespace())
+                    .take(8)
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+            })
+            .filter(|label| !label.is_empty());
+
+        let (usage_icon, hourly_percent, weekly_percent) =
+            if let Some(snapshot) = &self.rate_limit_snapshot {
+                let hourly = snapshot.primary_used_percent.clamp(0.0, 100.0).round() as u8;
+                let weekly = snapshot.secondary_used_percent.clamp(0.0, 100.0).round() as u8;
+                let icon = if snapshot.primary_used_percent <= 10.0 {
+                    '○'
+                } else if snapshot.primary_used_percent <= 25.0 {
+                    '◔'
+                } else if snapshot.primary_used_percent <= 50.0 {
+                    '◑'
+                } else if snapshot.primary_used_percent <= 75.0 {
+                    '◕'
+                } else {
+                    '●'
+                };
+                (Some(icon), Some(hourly), Some(weekly))
+            } else {
+                (None, None, None)
+            };
+
+        TerminalFooterMeta {
+            model: self.config.model.to_ascii_lowercase(),
+            reasoning: Self::format_reasoning_effort(self.config.model_reasoning_effort)
+                .to_ascii_lowercase(),
+            cwd,
+            branch: self.get_git_branch().map(|branch| branch.to_ascii_lowercase()),
+            account_label,
+            usage_icon,
+            hourly_percent,
+            weekly_percent,
+        }
     }
 
     pub(crate) fn handle_perf_command(&mut self, args: String) {
@@ -17038,6 +17186,7 @@ impl ChatWidget<'_> {
             self.config.tui.show_explore_details,
             self.config.tui.show_block_type_labels,
             self.config.tui.rounded_corners,
+            self.config.tui.auto_review_symbols_only,
         );
         MagicSettingsContent::new(view)
     }
@@ -22496,6 +22645,7 @@ Have we met every part of this goal and is there no further work to do?"#
             "Ctrl+O",
             "Snatch prompt (copy to clipboard + clear)",
         ));
+        lines.push(kv("Ctrl+L", "Clear input"));
         lines.push(kv("Ctrl+J", "Insert newline"));
         lines.push(kv("Shift+Enter", "Insert newline"));
         // Split combined shortcuts into separate rows for readability
@@ -27210,18 +27360,24 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 
     fn refresh_standard_terminal_hint(&mut self) {
-        if self.standard_terminal_mode {
-            let message = "Standard terminal mode active. Press Ctrl+T to return to full UI.";
-            self.bottom_pane
-                .set_standard_terminal_hint(Some(message.to_string()));
-        } else {
+        if !self.standard_terminal_mode {
+            self.bottom_pane.set_standard_terminal_hint(None);
+            return;
+        }
+
+        // Standard terminal mode no longer shows a persistent banner.
+        // Keep Auto Drive-specific hints, but clear any generic message.
+        if !self.auto_state.is_active() && !self.auto_state.should_show_goal_entry() {
             self.bottom_pane.set_standard_terminal_hint(None);
         }
     }
 
     pub(crate) fn set_standard_terminal_mode(&mut self, enabled: bool) {
         self.standard_terminal_mode = enabled;
+        self.bottom_pane.set_standard_terminal_mode(enabled);
+        self.bottom_pane.set_compact_compose(enabled);
         self.refresh_standard_terminal_hint();
+        self.refresh_terminal_footer_meta();
     }
 
     pub(crate) fn is_reasoning_shown(&self) -> bool {
@@ -27277,6 +27433,26 @@ Have we met every part of this goal and is there no further work to do?"#
         };
         self.bottom_pane.update_status_text(status.to_string());
         self.invalidate_height_cache();
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_auto_review_symbols_only(&mut self, enabled: bool) {
+        self.config.tui.auto_review_symbols_only = enabled;
+        self.bottom_pane.set_auto_review_symbols_only(enabled);
+
+        if let Ok(home) = code_core::config::find_code_home() {
+            if let Err(err) = code_core::config::set_tui_auto_review_symbols_only(&home, enabled)
+            {
+                tracing::warn!("Failed to persist auto review symbols mode: {err}");
+            }
+        }
+
+        let status = if enabled {
+            "Auto review: symbols"
+        } else {
+            "Auto review: words"
+        };
+        self.bottom_pane.update_status_text(status.to_string());
         self.request_redraw();
     }
 
@@ -30210,6 +30386,9 @@ Have we met every part of this goal and is there no further work to do?"#
         //   3) Branch
         //   4) Directory
         let branch_opt = self.get_git_branch();
+        let key_style = Style::default()
+            .fg(crate::colors::function())
+            .add_modifier(Modifier::BOLD);
 
         // Helper to assemble spans based on include flags
         let build_spans = |include_reasoning: bool,
@@ -30232,17 +30411,15 @@ Have we met every part of this goal and is there no further work to do?"#
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    "Model: ",
+                    "model: ",
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    self.format_model_name(&self.config.model),
+                    self.config.model.to_ascii_lowercase(),
                     Style::default().fg(crate::colors::info()),
                 ));
-                spans.push(Span::styled(
-                    " (Ctrl+Y)",
-                    Style::default().fg(crate::colors::text_dim()),
-                ));
+                spans.push(Span::styled(" ", Style::default().fg(crate::colors::text_dim())));
+                spans.push(Span::styled("y", key_style));
             }
 
             if include_reasoning {
@@ -30251,17 +30428,16 @@ Have we met every part of this goal and is there no further work to do?"#
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    "Reasoning: ",
+                    "reason: ",
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    Self::format_reasoning_effort(self.config.model_reasoning_effort),
+                    Self::format_reasoning_effort(self.config.model_reasoning_effort)
+                        .to_ascii_lowercase(),
                     Style::default().fg(crate::colors::info()),
                 ));
-                spans.push(Span::styled(
-                    " (Ctrl+N)",
-                    Style::default().fg(crate::colors::text_dim()),
-                ));
+                spans.push(Span::styled(" ", Style::default().fg(crate::colors::text_dim())));
+                spans.push(Span::styled("n", key_style));
             }
 
             if include_dir {
@@ -30270,11 +30446,11 @@ Have we met every part of this goal and is there no further work to do?"#
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    "Directory: ",
+                    "dir: ",
                     Style::default().fg(crate::colors::text_dim()),
                 ));
                 spans.push(Span::styled(
-                    dir_display.to_string(),
+                    dir_display.to_ascii_lowercase(),
                     Style::default().fg(crate::colors::info()),
                 ));
             }
@@ -30286,11 +30462,11 @@ Have we met every part of this goal and is there no further work to do?"#
                         Style::default().fg(crate::colors::text_dim()),
                     ));
                     spans.push(Span::styled(
-                        "Branch: ",
+                        "branch: ",
                         Style::default().fg(crate::colors::text_dim()),
                     ));
                     spans.push(Span::styled(
-                        branch.clone(),
+                        branch.to_ascii_lowercase(),
                         Style::default().fg(crate::colors::success_green()),
                     ));
                 }
