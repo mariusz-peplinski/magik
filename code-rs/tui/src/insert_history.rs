@@ -459,14 +459,14 @@ impl Command for SetUnderlineColor {
     }
 }
 
-const SCROLLBACK_SIDE_MARGIN: usize = 2;
+const SCROLLBACK_SIDE_MARGIN: usize = 3;
 
 /// Word-aware wrapping used specifically for standard-terminal scrollback.
 ///
 /// Behavior:
-/// - Preserves a two-column left margin and a two-column right margin.
+/// - Preserves a three-column left margin and a three-column right margin.
 /// - If a line starts with a known gutter marker (for example `›` or `•`),
-///   render it as `" {marker}"` on the first wrapped row, then plain `"  "`
+///   render it as `" {marker} "` on the first wrapped row, then plain `"   "`
 ///   on continuation rows.
 fn word_wrap_lines_for_scrollback(lines: &[Line], width: u16) -> Vec<Line<'static>> {
     let mut out = Vec::new();
@@ -485,9 +485,9 @@ fn word_wrap_line_for_scrollback(line: &Line, screen_width: usize) -> Vec<Line<'
     let wrapped = word_wrap_line(&stripped, content_width);
 
     let first_prefix = marker
-        .map(|marker| format!(" {marker}"))
-        .unwrap_or_else(|| "  ".to_string());
-    let continuation_prefix = "  ";
+        .map(|marker| format!(" {marker} "))
+        .unwrap_or_else(|| "   ".to_string());
+    let continuation_prefix = "   ";
 
     wrapped
         .into_iter()

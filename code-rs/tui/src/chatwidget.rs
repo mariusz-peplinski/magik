@@ -5713,7 +5713,6 @@ impl ChatWidget<'_> {
 
         if self.standard_terminal_mode {
             let mut lines = Vec::new();
-            lines.push(ratatui::text::Line::from(""));
             lines.extend(self.export_transcript_lines_for_buffer());
             self.app_event_tx
                 .send(crate::app_event::AppEvent::InsertHistory(lines));
@@ -27335,7 +27334,6 @@ Have we met every part of this goal and is there no further work to do?"#
 
         if self.standard_terminal_mode {
             let mut lines = Vec::new();
-            lines.push(ratatui::text::Line::from(""));
             lines.extend(self.export_transcript_lines_for_buffer());
             self.app_event_tx
                 .send(crate::app_event::AppEvent::InsertHistory(lines));
@@ -27366,7 +27364,6 @@ Have we met every part of this goal and is there no further work to do?"#
 
         if self.standard_terminal_mode {
             let mut lines = Vec::new();
-            lines.push(ratatui::text::Line::from(""));
             lines.extend(self.export_transcript_lines_for_buffer());
             self.app_event_tx
                 .send(crate::app_event::AppEvent::InsertHistory(lines));
@@ -29980,7 +29977,7 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 
     /// Export transcript for buffer-mode mirroring: omit internal sentinels
-    /// and include gutter icons and a blank line between items for readability.
+    /// and include gutter icons and block type labels.
     pub(crate) fn export_transcript_lines_for_buffer(&self) -> Vec<ratatui::text::Line<'static>> {
         let mut out: Vec<ratatui::text::Line<'static>> = Vec::new();
         for (idx, cell) in self.history_cells.iter().enumerate() {
@@ -29997,7 +29994,7 @@ Have we met every part of this goal and is there no further work to do?"#
             if let Some(label) =
                 block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant)
             {
-                out.push(ratatui::text::Line::from(format!("[{label}]")));
+                out.push(styled_block_label_line(label));
             }
 
             // Apply gutter to streaming preview (first line carries the marker,
@@ -30006,10 +30003,13 @@ Have we met every part of this goal and is there no further work to do?"#
                 first.spans.insert(0, ratatui::text::Span::raw("•"));
             }
             out.extend(streaming_lines);
-            out.push(ratatui::text::Line::from(""));
         }
         out
     }
+
+    // Block label rows intentionally use theme colors even in standard-terminal
+    // mode so they remain visually distinct when mirroring history into native
+    // scrollback.
 
     pub(crate) fn format_stream_lines_for_terminal(
         &self,
@@ -30042,7 +30042,8 @@ Have we met every part of this goal and is there no further work to do?"#
                 StreamKind::Reasoning => crate::history_cell::HistoryCellType::Reasoning,
             };
             if let Some(label) = block_type_label_for_cell_kind(cell_kind) {
-                out.push(ratatui::text::Line::from(format!("[{label}]")));
+                out.push(ratatui::text::Line::from(""));
+                out.push(styled_block_label_line(label));
             }
         }
 
@@ -30068,10 +30069,11 @@ Have we met every part of this goal and is there no further work to do?"#
         }
 
         if let Some(label) = block_type_label_for_cell_kind(cell.kind()) {
-            lines.insert(0, ratatui::text::Line::from(format!("[{label}]")));
+            if idx > 0 && !matches!(cell.kind(), crate::history_cell::HistoryCellType::User) {
+                lines.insert(0, ratatui::text::Line::from(""));
+            }
+            lines.insert(0, styled_block_label_line(label));
         }
-
-        lines.push(ratatui::text::Line::from(""));
         lines
     }
 
@@ -30896,6 +30898,16 @@ Have we met every part of this goal and is there no further work to do?"#
 
         placeholder_widget.render(area, buf);
     }
+}
+
+fn styled_block_label_line(label: &str) -> ratatui::text::Line<'static> {
+    let label_style = ratatui::style::Style::default()
+        .fg(crate::colors::function())
+        .add_modifier(ratatui::style::Modifier::BOLD);
+    ratatui::text::Line::from(vec![ratatui::text::Span::styled(
+        format!("[{label}]"),
+        label_style,
+    )])
 }
 
 async fn run_background_review(
