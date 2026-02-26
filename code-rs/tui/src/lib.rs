@@ -809,11 +809,8 @@ fn run_ratatui_app(
     if config.tui.alternate_screen {
         terminal.clear()?;
     } else {
-        // Start in standard terminal mode: leave alt screen and DO NOT clear
-        // the normal buffer. We want prior shell history to remain intact and
-        // new chat output to append inline into scrollback. Ensure line wrap is
-        // enabled and cursor is left where the shell put it.
-        let _ = tui::leave_alt_screen_only();
+        // Standard-terminal mode now starts directly without entering alt
+        // screen first; keep line-wrap enabled and preserve existing scrollback.
         let _ = ratatui::crossterm::execute!(
             std::io::stdout(),
             ratatui::crossterm::terminal::EnableLineWrap

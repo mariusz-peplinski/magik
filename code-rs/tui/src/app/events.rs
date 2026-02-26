@@ -26,6 +26,7 @@ use crate::external_editor;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell;
 use crate::slash_command::SlashCommand;
+use crate::streaming::StreamKind;
 use crate::thread_spawner;
 use crate::tui;
 
@@ -104,10 +105,34 @@ impl App<'_> {
         });
     }
 
+    fn terminal_stream_prefix_key(kind: StreamKind, id: Option<&str>) -> Option<String> {
+        id.filter(|value| !value.trim().is_empty())
+            .map(|value| format!("{kind:?}:{value}"))
+    }
+
+    fn should_emit_terminal_stream_prefix(&mut self, kind: StreamKind, id: Option<&str>) -> bool {
+        match Self::terminal_stream_prefix_key(kind, id) {
+            Some(key) => self.standard_terminal_stream_prefixes.insert(key),
+            None => true,
+        }
+    }
+
+    fn clear_terminal_stream_prefix(&mut self, kind: StreamKind, id: Option<&str>) {
+        if let Some(key) = Self::terminal_stream_prefix_key(kind, id) {
+            self.standard_terminal_stream_prefixes.remove(&key);
+        }
+    }
+
     pub(crate) fn run(&mut self, terminal: &mut tui::Tui) -> Result<()> {
         // Insert an event to trigger the first render.
         let app_event_tx = self.app_event_tx.clone();
-        app_event_tx.send(AppEvent::RequestRedraw);
+        if self.alt_screen_active {
+            app_event_tx.send(AppEvent::RequestRedraw);
+        } else {
+            // In standard-terminal mode, let pending startup history inserts
+            // (logo/banner/transcript) flush first, then render the composer.
+            app_event_tx.send(AppEvent::ScheduleFrameIn(Duration::from_millis(16)));
+        }
         // Some Windows/macOS terminals report an initial size that stabilizes
         // shortly after entering the alt screen. Schedule one follow‑up frame
         // to catch any late size change without polling.
@@ -116,65 +141,88 @@ impl App<'_> {
         'main: loop {
             let event = match self.next_event_priority() { Some(e) => e, None => break 'main };
             match event {
-                AppEvent::InsertHistory(mut lines) => match &mut self.app_state {
-                    AppState::Chat { widget } => {
-                        // Coalesce consecutive InsertHistory events to reduce redraw churn.
-                        while let Ok(AppEvent::InsertHistory(mut more)) = self.app_event_rx_bulk.try_recv() {
-                            lines.append(&mut more);
-                        }
-                        tracing::debug!("app: InsertHistory lines={}", lines.len());
-                        if self.alt_screen_active {
-                            widget.insert_history_lines(lines)
-                        } else {
-                            use std::io::stdout;
-                            // Compute desired bottom height now, so growing/shrinking input
-                            // adjusts the reserved region immediately even before the next frame.
-                            let width = terminal.size().map(|s| s.width).unwrap_or(80);
-                            let reserve = widget.desired_bottom_height(width).max(1);
-                            let _ = execute!(stdout(), crossterm::terminal::BeginSynchronizedUpdate);
-                            crate::insert_history::insert_history_lines_above(terminal, reserve, lines);
-                            let _ = execute!(stdout(), crossterm::terminal::EndSynchronizedUpdate);
-                            self.schedule_redraw();
-                        }
-                    },
-                    AppState::Onboarding { .. } => {}
+                AppEvent::InsertHistory(mut lines) => {
+                    let last_frame_size = self.last_frame_size;
+                    match &mut self.app_state {
+                        AppState::Chat { widget } => {
+                            // Coalesce consecutive InsertHistory events to reduce redraw churn.
+                            while let Ok(AppEvent::InsertHistory(mut more)) = self.app_event_rx_bulk.try_recv() {
+                                lines.append(&mut more);
+                            }
+                            tracing::debug!("app: InsertHistory lines={}", lines.len());
+                            if self.alt_screen_active {
+                                widget.insert_history_lines(lines)
+                            } else {
+                                mirror_standard_terminal_lines(terminal, widget, lines, last_frame_size);
+                                self.schedule_redraw();
+                            }
+                        },
+                        AppState::Onboarding { .. } => {}
+                    }
                 },
-                AppEvent::InsertHistoryWithKind { id, kind, lines } => match &mut self.app_state {
-                    AppState::Chat { widget } => {
-                        tracing::debug!("app: InsertHistoryWithKind kind={:?} id={:?} lines={}", kind, id, lines.len());
-                        // Always update widget history, even in terminal mode.
-                        // In terminal mode, the widget will emit an InsertHistory event
-                        // which we will mirror to scrollback in the handler above.
-                        let to_mirror = lines.clone();
-                        widget.insert_history_lines_with_kind(kind, id, lines);
-                        if !self.alt_screen_active {
-                            use std::io::stdout;
-                            let width = terminal.size().map(|s| s.width).unwrap_or(80);
-                            let reserve = widget.desired_bottom_height(width).max(1);
-                            let _ = execute!(stdout(), crossterm::terminal::BeginSynchronizedUpdate);
-                            crate::insert_history::insert_history_lines_above(terminal, reserve, to_mirror);
-                            let _ = execute!(stdout(), crossterm::terminal::EndSynchronizedUpdate);
-                            self.schedule_redraw();
+                AppEvent::InsertHistoryWithKind { id, kind, lines } => {
+                    let include_prefix =
+                        self.should_emit_terminal_stream_prefix(kind, id.as_deref());
+                    let last_frame_size = self.last_frame_size;
+                    match &mut self.app_state {
+                        AppState::Chat { widget } => {
+                            tracing::debug!(
+                                "app: InsertHistoryWithKind kind={:?} id={:?} lines={}",
+                                kind,
+                                id,
+                                lines.len()
+                            );
+                            let to_mirror = if self.alt_screen_active {
+                                Vec::new()
+                            } else {
+                                widget.format_stream_lines_for_terminal(
+                                    kind,
+                                    lines.clone(),
+                                    include_prefix,
+                                    include_prefix,
+                                )
+                            };
+                            widget.insert_history_lines_with_kind(kind, id, lines);
+                            if !self.alt_screen_active {
+                                mirror_standard_terminal_lines(terminal, widget, to_mirror, last_frame_size);
+                                self.schedule_redraw();
+                            }
                         }
-                    },
-                    AppState::Onboarding { .. } => {}
+                        AppState::Onboarding { .. } => {}
+                    }
                 },
-                AppEvent::InsertFinalAnswer { id, lines, source } => match &mut self.app_state {
-                    AppState::Chat { widget } => {
-                        tracing::debug!("app: InsertFinalAnswer id={:?} lines={} source_len={}", id, lines.len(), source.len());
-                        let to_mirror = lines.clone();
-                        widget.insert_final_answer_with_id(id, lines, source);
-                        if !self.alt_screen_active {
-                            use std::io::stdout;
-                            let width = terminal.size().map(|s| s.width).unwrap_or(80);
-                            let reserve = widget.desired_bottom_height(width).max(1);
-                            let _ = execute!(stdout(), crossterm::terminal::BeginSynchronizedUpdate);
-                            crate::insert_history::insert_history_lines_above(terminal, reserve, to_mirror);
-                            let _ = execute!(stdout(), crossterm::terminal::EndSynchronizedUpdate);
-                            self.schedule_redraw();
+                AppEvent::InsertFinalAnswer { id, lines, source } => {
+                    let include_prefix = self
+                        .should_emit_terminal_stream_prefix(StreamKind::Answer, id.as_deref());
+                    let clear_stream_id = id.clone();
+                    let last_frame_size = self.last_frame_size;
+                    match &mut self.app_state {
+                        AppState::Chat { widget } => {
+                            tracing::debug!(
+                                "app: InsertFinalAnswer id={:?} lines={} source_len={}",
+                                id,
+                                lines.len(),
+                                source.len()
+                            );
+                            let to_mirror = if self.alt_screen_active {
+                                Vec::new()
+                            } else {
+                                widget.format_stream_lines_for_terminal(
+                                    StreamKind::Answer,
+                                    lines.clone(),
+                                    include_prefix,
+                                    include_prefix,
+                                )
+                            };
+                            widget.insert_final_answer_with_id(id, lines, source);
+                            if !self.alt_screen_active {
+                                mirror_standard_terminal_lines(terminal, widget, to_mirror, last_frame_size);
+                                self.schedule_redraw();
+                            }
                         }
-                    },
-                    AppState::Onboarding { .. } => {}
+                        AppState::Onboarding { .. } => {}
+                    }
+                    self.clear_terminal_stream_prefix(StreamKind::Answer, clear_stream_id.as_deref());
                 },
                 AppEvent::InsertBackgroundEvent { message, placement, order } => match &mut self.app_state {
                     AppState::Chat { widget } => {
@@ -2492,6 +2540,32 @@ impl App<'_> {
         )
     }
 
+}
+
+fn mirror_standard_terminal_lines(
+    terminal: &mut tui::Tui,
+    widget: &ChatWidget,
+    lines: Vec<ratatui::text::Line<'static>>,
+    last_frame_size: Option<ratatui::prelude::Size>,
+) {
+    if lines.is_empty() {
+        return;
+    }
+
+    use std::io::stdout;
+    let _ = execute!(stdout(), crossterm::terminal::BeginSynchronizedUpdate);
+
+    if last_frame_size.is_none() {
+        crate::insert_history::append_history_lines_plain(terminal, lines);
+    } else {
+        // Compute desired bottom height now, so growing/shrinking input
+        // adjusts the reserved region immediately even before the next frame.
+        let width = terminal.size().map(|s| s.width).unwrap_or(80);
+        let reserve = widget.desired_bottom_height(width).max(1);
+        crate::insert_history::insert_history_lines_above(terminal, reserve, lines);
+    }
+
+    let _ = execute!(stdout(), crossterm::terminal::EndSynchronizedUpdate);
 }
 
 fn is_image_clipboard_paste_shortcut(key_event: &KeyEvent) -> bool {

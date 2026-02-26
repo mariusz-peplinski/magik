@@ -2241,12 +2241,6 @@ impl ChatComposer {
         Some(used.clamp(0.0, 100.0).round() as u8)
     }
 
-    fn tokens_used_count(&self) -> Option<u64> {
-        self.token_usage_info
-            .as_ref()
-            .map(|info| info.last_token_usage.tokens_in_context_window())
-    }
-
     fn shortcut_action_spans(
         action: &str,
         key: &str,
@@ -2349,13 +2343,6 @@ impl ChatComposer {
             Span::from(" ").style(label_style),
             Span::from(account.to_string()).style(label_style),
         ], true));
-
-        if let Some(tokens_used) = self.tokens_used_count() {
-            left_sections.push((5, vec![
-                Span::from(format_with_thousands(tokens_used)).style(label_style),
-                Span::from(" tok").style(label_style),
-            ], true));
-        }
 
         if let Some(context_used) = self.context_used_percent() {
             left_sections.push((4, vec![

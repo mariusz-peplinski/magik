@@ -45,11 +45,9 @@ pub fn insert_history_lines_to_writer<B, W>(
 
     let mut area = terminal.get_frame().area();
 
-    // Pre-wrap lines using word-aware wrapping so terminal scrollback sees the same
-    // formatting as the TUI. This avoids character-level hard wrapping by the terminal.
-    // Wrap to the full content width of the viewport in standard mode.
-    let content_width = area.width.max(1);
-    let wrapped = word_wrap_lines(&lines, content_width);
+    // Pre-wrap lines using a scrollback-aware wrapper that enforces terminal
+    // side margins and preserves first-line gutter markers.
+    let wrapped = word_wrap_lines_for_scrollback(&lines, area.width.max(1));
     let wrapped_lines = wrapped.len() as u16;
     let cursor_top = if area.bottom() < screen_size.height {
         // If the viewport is not at the bottom of the screen, scroll it down to make room.
@@ -151,9 +149,8 @@ pub fn insert_history_lines_to_writer_above<B, W>(
     let reserved = reserved_bottom_rows.min(screen_h.saturating_sub(1));
     let region_bottom = screen_h.saturating_sub(reserved).max(1);
 
-    // Pre-wrap to avoid terminal hard-wrap artifacts
-    let content_width = screen_size.width.max(1);
-    let wrapped = word_wrap_lines(&lines, content_width);
+    // Pre-wrap to avoid terminal hard-wrap artifacts while preserving margins.
+    let wrapped = word_wrap_lines_for_scrollback(&lines, screen_size.width.max(1));
     let wrapped_count = wrapped.len();
 
     tracing::debug!(
@@ -178,7 +175,7 @@ pub fn insert_history_lines_to_writer_above<B, W>(
         // line-by-line prints that let the terminal naturally scroll. This is
         // safe before the first bottom-pane draw and avoids a 1-line scroll
         // region that would overwrite the same line repeatedly.
-        for line in word_wrap_lines(&lines, screen_size.width.max(1)) {
+        for line in word_wrap_lines_for_scrollback(&lines, screen_size.width.max(1)) {
             write_spans(writer, line.iter()).ok();
             queue!(writer, Print("\r\n")).ok();
         }
@@ -214,6 +211,37 @@ pub fn insert_history_lines_to_writer_above<B, W>(
     queue!(writer, ResetScrollRegion).ok();
     if let Some(cursor_pos) = cursor_pos {
         queue!(writer, MoveTo(cursor_pos.x, cursor_pos.y)).ok();
+    }
+    writer.flush().ok();
+}
+
+/// Append wrapped history lines at the current cursor position without
+/// reserving a bottom pane. Used during standard-terminal startup before the
+/// first frame render to avoid full-screen scroll-region churn.
+#[allow(dead_code)]
+pub(crate) fn append_history_lines_plain(terminal: &mut tui::Tui, lines: Vec<Line>) {
+    let mut out = std::io::stdout();
+    append_history_lines_plain_to_writer(terminal, &mut out, lines);
+}
+
+#[allow(dead_code)]
+pub fn append_history_lines_plain_to_writer<B, W>(
+    terminal: &mut ratatui::Terminal<B>,
+    writer: &mut W,
+    lines: Vec<Line>,
+) where
+    B: ratatui::backend::Backend,
+    W: Write,
+{
+    if lines.is_empty() {
+        return;
+    }
+
+    let screen_size = terminal.backend().size().unwrap_or(Size::new(0, 0));
+    let wrapped = word_wrap_lines_for_scrollback(&lines, screen_size.width.max(1));
+    for line in wrapped {
+        write_spans(writer, line.iter()).ok();
+        queue!(writer, Print("\r\n")).ok();
     }
     writer.flush().ok();
 }
@@ -429,6 +457,103 @@ impl Command for SetUnderlineColor {
         // Windows doesn't support underline colors in the same way
         Ok(())
     }
+}
+
+const SCROLLBACK_SIDE_MARGIN: usize = 2;
+
+/// Word-aware wrapping used specifically for standard-terminal scrollback.
+///
+/// Behavior:
+/// - Preserves a two-column left margin and a two-column right margin.
+/// - If a line starts with a known gutter marker (for example `›` or `•`),
+///   render it as `" {marker}"` on the first wrapped row, then plain `"  "`
+///   on continuation rows.
+fn word_wrap_lines_for_scrollback(lines: &[Line], width: u16) -> Vec<Line<'static>> {
+    let mut out = Vec::new();
+    let screen_width = width.max(1) as usize;
+    for line in lines {
+        out.extend(word_wrap_line_for_scrollback(line, screen_width));
+    }
+    out
+}
+
+fn word_wrap_line_for_scrollback(line: &Line, screen_width: usize) -> Vec<Line<'static>> {
+    let content_width = screen_width
+        .saturating_sub(SCROLLBACK_SIDE_MARGIN * 2)
+        .max(1);
+    let (marker, stripped) = split_scrollback_marker(line);
+    let wrapped = word_wrap_line(&stripped, content_width);
+
+    let first_prefix = marker
+        .map(|marker| format!(" {marker}"))
+        .unwrap_or_else(|| "  ".to_string());
+    let continuation_prefix = "  ";
+
+    wrapped
+        .into_iter()
+        .enumerate()
+        .map(|(idx, mut line)| {
+            let prefix = if idx == 0 {
+                first_prefix.as_str()
+            } else {
+                continuation_prefix
+            };
+            line.spans.insert(0, Span::raw(prefix.to_string()));
+            line
+        })
+        .collect()
+}
+
+fn split_scrollback_marker(line: &Line<'_>) -> (Option<char>, Line<'static>) {
+    let mut flat = String::new();
+    let mut span_bounds = Vec::new(); // (start_byte, end_byte, style)
+    let mut cursor = 0usize;
+    for s in &line.spans {
+        let text = s.content.as_ref();
+        let start = cursor;
+        flat.push_str(text);
+        cursor += text.len();
+        span_bounds.push((start, cursor, s.style));
+    }
+
+    let Some(marker) = flat.chars().next() else {
+        return (None, to_owned_line(line));
+    };
+
+    if !is_scrollback_marker(marker) {
+        return (None, to_owned_line(line));
+    }
+
+    let marker_bytes = marker.len_utf8();
+    let stripped = slice_line_spans(line, &span_bounds, marker_bytes, flat.len());
+    (Some(marker), stripped)
+}
+
+fn is_scrollback_marker(ch: char) -> bool {
+    matches!(
+        ch,
+        '›'
+            | '•'
+            | '⚙'
+            | '✔'
+            | '✖'
+            | '⚠'
+            | '★'
+            | '»'
+            | '↯'
+            | '❯'
+            | '○'
+            | '◔'
+            | '◑'
+            | '◕'
+            | '●'
+            | '◐'
+            | '◓'
+            | '◒'
+            | '⋮'
+            | '◆'
+            | '📍'
+    )
 }
 
 /// Word-aware wrapping for a list of `Line`s preserving styles.

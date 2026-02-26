@@ -87,39 +87,51 @@ pub fn init(config: &Config) -> Result<(Tui, TerminalInfo)> {
     // Initialize syntax highlighting preference from config
     crate::syntax_highlight::init_highlight_from_config(&config.tui.highlight);
 
-    execute!(stdout(), EnableBracketedPaste)?;
-    enable_alternate_scroll_mode()?;
-    // Enable focus change events so we can detect when the terminal window/tab
-    // regains focus and proactively repaint the UI (helps terminals that clear
-    // their alt‑screen buffer while unfocused). However, certain environments
-    // (notably Windows Terminal running Git Bash/MSYS and some legacy Windows
-    // terminals) will echo ESC [ I / ESC [ O literally ("[I", "[O") and may
-    // disrupt input handling. Apply a conservative heuristic and allow users to
-    // override via env vars:
-    //   - CODE_DISABLE_FOCUS=1 forces off
-    //   - CODE_ENABLE_FOCUS=1 forces on
-    if should_enable_focus_change() {
-        let _ = execute!(stdout(), EnableFocusChange);
-    } else {
-        tracing::info!(
-            "Focus tracking disabled (heuristic). Set CODE_ENABLE_FOCUS=1 to force on."
-        );
-    }
+    let use_alt_screen = config.tui.alternate_screen;
+    if use_alt_screen {
+        execute!(stdout(), EnableBracketedPaste)?;
+        enable_alternate_scroll_mode()?;
+        // Enable focus change events so we can detect when the terminal window/tab
+        // regains focus and proactively repaint the UI (helps terminals that clear
+        // their alt‑screen buffer while unfocused). However, certain environments
+        // (notably Windows Terminal running Git Bash/MSYS and some legacy Windows
+        // terminals) will echo ESC [ I / ESC [ O literally ("[I", "[O") and may
+        // disrupt input handling. Apply a conservative heuristic and allow users to
+        // override via env vars:
+        //   - CODE_DISABLE_FOCUS=1 forces off
+        //   - CODE_ENABLE_FOCUS=1 forces on
+        if should_enable_focus_change() {
+            let _ = execute!(stdout(), EnableFocusChange);
+        } else {
+            tracing::info!(
+                "Focus tracking disabled (heuristic). Set CODE_ENABLE_FOCUS=1 to force on."
+            );
+        }
 
-    // Enter alternate screen mode for full screen TUI
-    execute!(stdout(), crossterm::terminal::EnterAlternateScreen)?;
-    ALT_SCREEN_ACTIVE.store(true, Ordering::SeqCst);
+        // Enter alternate screen mode for full screen TUI.
+        execute!(stdout(), crossterm::terminal::EnterAlternateScreen)?;
+        ALT_SCREEN_ACTIVE.store(true, Ordering::SeqCst);
+    } else {
+        // Start directly in standard-terminal mode without briefly entering
+        // alternate screen first. This prevents startup flicker and avoids
+        // terminals that render a full-screen newline burst during a quick
+        // enter/leave alt-screen transition.
+        ALT_SCREEN_ACTIVE.store(false, Ordering::SeqCst);
+    }
 
     // Query terminal capabilities and font size after entering alternate screen
     // but before enabling raw mode
     let terminal_info = query_terminal_info();
 
     enable_raw_mode()?;
-    // Enable keyboard enhancement flags only when supported *and* the current
-    // terminal environment is known to handle them reliably. Some Windows
-    // terminal stacks (including WSL/ConPTY-derived PTYs) can report support
-    // but still deliver broken input when these flags are enabled.
-    if supports_keyboard_enhancement().unwrap_or(false) && should_enable_keyboard_enhancement() {
+    // Enable keyboard enhancement flags only in alternate-screen mode.
+    // Standard-terminal mode intentionally keeps enhanced keyboard protocols
+    // disabled so escape-sequence based terminals don't leak protocol bytes
+    // into the normal scrollback.
+    if use_alt_screen
+        && supports_keyboard_enhancement().unwrap_or(false)
+        && should_enable_keyboard_enhancement()
+    {
         let _ = execute!(
             stdout(),
             PushKeyboardEnhancementFlags(
@@ -133,55 +145,70 @@ pub fn init(config: &Config) -> Result<(Tui, TerminalInfo)> {
     }
     set_panic_hook();
 
-    // Clear screen with theme background color
-    let theme_bg = crate::colors::background();
-    let theme_fg = crate::colors::text();
-    execute!(
-        stdout(),
-        SetColors(crossterm::style::Colors::new(
-            theme_fg.into(),
-            theme_bg.into()
-        )),
-        Clear(ClearType::All),
-        MoveTo(0, 0),
-        crossterm::terminal::SetTitle("Code"),
-        crossterm::terminal::EnableLineWrap
-    )?;
+    if use_alt_screen {
+        // Clear screen with theme background color.
+        let theme_bg = crate::colors::background();
+        let theme_fg = crate::colors::text();
+        execute!(
+            stdout(),
+            SetColors(crossterm::style::Colors::new(
+                theme_fg.into(),
+                theme_bg.into()
+            )),
+            Clear(ClearType::All),
+            MoveTo(0, 0),
+            crossterm::terminal::SetTitle("Code"),
+            crossterm::terminal::EnableLineWrap
+        )?;
 
-    // Some terminals (notably macOS Terminal.app with certain profiles)
-    // clear to the terminal's default background color instead of the
-    // currently set background attribute. Proactively painting the full
-    // screen with our theme bg fixes that — but doing so on Windows Terminal
-    // has been reported to cause broken colors/animation for some users.
-    //
-    // Restrict the explicit paint to terminals that benefit from it and skip
-    // it on Windows Terminal (TERM_PROGRAM=Windows_Terminal or WT_SESSION set).
-    let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default();
-    let is_windows_terminal = term_program == "Windows_Terminal" || std::env::var("WT_SESSION").is_ok();
-    let should_paint_bg = if term_program == "Apple_Terminal" {
-        true
-    } else if is_windows_terminal {
-        false
-    } else {
-        // For other terminals, be conservative and skip unless a user opts in
-        // via CODE_FORCE_FULL_BG_PAINT=1.
-        std::env::var("CODE_FORCE_FULL_BG_PAINT").map(|v| v == "1").unwrap_or(false)
-    };
+        // Some terminals (notably macOS Terminal.app with certain profiles)
+        // clear to the terminal's default background color instead of the
+        // currently set background attribute. Proactively painting the full
+        // screen with our theme bg fixes that — but doing so on Windows Terminal
+        // has been reported to cause broken colors/animation for some users.
+        //
+        // Restrict the explicit paint to terminals that benefit from it and skip
+        // it on Windows Terminal (TERM_PROGRAM=Windows_Terminal or WT_SESSION set).
+        let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default();
+        let is_windows_terminal =
+            term_program == "Windows_Terminal" || std::env::var("WT_SESSION").is_ok();
+        let should_paint_bg = if term_program == "Apple_Terminal" {
+            true
+        } else if is_windows_terminal {
+            false
+        } else {
+            // For other terminals, be conservative and skip unless a user opts in
+            // via CODE_FORCE_FULL_BG_PAINT=1.
+            std::env::var("CODE_FORCE_FULL_BG_PAINT")
+                .map(|v| v == "1")
+                .unwrap_or(false)
+        };
 
-    if should_paint_bg {
-        if let Ok((cols, rows)) = crossterm::terminal::size() {
-            // Build a single line of spaces once to reduce allocations.
-            let blank = " ".repeat(cols as usize);
-            // Set explicit fg/bg to the theme's colors while painting.
-            execute!(stdout(), SetForegroundColor(CtColor::from(theme_fg)), SetBackgroundColor(CtColor::from(theme_bg)))?;
-            for y in 0..rows {
-                execute!(stdout(), MoveTo(0, y), Print(&blank))?;
+        if should_paint_bg {
+            if let Ok((cols, rows)) = crossterm::terminal::size() {
+                // Build a single line of spaces once to reduce allocations.
+                let blank = " ".repeat(cols as usize);
+                // Set explicit fg/bg to the theme's colors while painting.
+                execute!(
+                    stdout(),
+                    SetForegroundColor(CtColor::from(theme_fg)),
+                    SetBackgroundColor(CtColor::from(theme_bg))
+                )?;
+                for y in 0..rows {
+                    execute!(stdout(), MoveTo(0, y), Print(&blank))?;
+                }
+                // Restore cursor to home and keep our colors configured for subsequent drawing.
+                // Avoid ResetColor here to prevent some terminals from flashing to their
+                // profile default background (e.g., white) between frames.
+                execute!(
+                    stdout(),
+                    MoveTo(0, 0),
+                    SetColors(crossterm::style::Colors::new(theme_fg.into(), theme_bg.into()))
+                )?;
             }
-            // Restore cursor to home and keep our colors configured for subsequent drawing.
-            // Avoid ResetColor here to prevent some terminals from flashing to their
-            // profile default background (e.g., white) between frames.
-            execute!(stdout(), MoveTo(0, 0), SetColors(crossterm::style::Colors::new(theme_fg.into(), theme_bg.into())))?;
         }
+    } else {
+        execute!(stdout(), crossterm::terminal::EnableLineWrap)?;
     }
 
     // Wrap stdout in a larger BufWriter to reduce syscalls and flushes.

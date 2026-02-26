@@ -515,6 +515,7 @@ impl App<'_> {
                 crossterm::terminal::EnableLineWrap
             );
             self.alt_screen_active = false;
+            self.standard_terminal_stream_prefixes.clear();
             // Persist preference
             let _ = code_core::config::set_tui_alternate_screen(&self.config.code_home, false);
             // Immediately mirror the entire transcript into the terminal scrollback so
@@ -537,6 +538,7 @@ impl App<'_> {
             let _ = crate::tui::enter_alt_screen_only(fg, bg);
             self.clear_on_first_frame = true;
             self.alt_screen_active = true;
+            self.standard_terminal_stream_prefixes.clear();
             // Persist preference
             let _ = code_core::config::set_tui_alternate_screen(&self.config.code_home, true);
             // Request immediate redraw

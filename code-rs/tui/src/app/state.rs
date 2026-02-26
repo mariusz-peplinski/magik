@@ -274,6 +274,10 @@ pub(crate) struct App<'a> {
     /// True when TUI is currently rendering in the terminal's alternate screen.
     pub(super) alt_screen_active: bool,
 
+    /// Tracks stream ids already prefixed in standard-terminal mirroring so
+    /// block labels and gutter markers only appear once per streamed response.
+    pub(super) standard_terminal_stream_prefixes: HashSet<String>,
+
     pub(super) terminal_runs: HashMap<u64, TerminalRunState>,
 
     pub(super) terminal_title_override: Option<String>,

@@ -13352,7 +13352,15 @@ impl ChatWidget<'_> {
         if !display_text.is_empty() {
             let key = self.next_req_key_prompt();
             let state = history_cell::new_user_prompt(display_text.clone());
-            let _ = self.history_insert_plain_state_with_key(state, key, "prompt");
+            let inserted_idx = self.history_insert_plain_state_with_key(state, key, "prompt");
+            if self.standard_terminal_mode {
+                if let Some(cell) = self.history_cells.get(inserted_idx) {
+                    let lines = self.render_lines_for_terminal(inserted_idx, cell.as_ref());
+                    if !lines.is_empty() {
+                        self.app_event_tx.send(crate::app_event::AppEvent::InsertHistory(lines));
+                    }
+                }
+            }
             self.pending_user_prompts_for_next_turn =
                 self.pending_user_prompts_for_next_turn.saturating_add(1);
         }
@@ -15668,11 +15676,17 @@ impl ChatWidget<'_> {
         use crate::exec_command::relativize_to_home;
 
         let cwd = match relativize_to_home(&self.config.cwd) {
-            Some(rel) if !rel.as_os_str().is_empty() => format!("~/{}", rel.display()),
-            Some(_) => "~".to_string(),
-            None => self.config.cwd.display().to_string(),
-        }
-        .to_ascii_lowercase();
+            Some(rel) if !rel.as_os_str().is_empty() => format!("~/{}/", rel.display()),
+            Some(_) => "~/".to_string(),
+            None => self
+                .config
+                .cwd
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty())
+                .map(|name| format!("{name}/"))
+                .unwrap_or_else(|| self.config.cwd.display().to_string()),
+        };
 
         let account_label = auth_accounts::get_active_account_id(&self.config.code_home)
             .ok()
@@ -29980,16 +29994,59 @@ Have we met every part of this goal and is there no further work to do?"#
             .map(|r| ratatui::text::Line::from(r.text))
             .collect::<Vec<_>>();
         if !streaming_lines.is_empty() {
-            // Apply gutter to streaming preview (first line gets " • ", continuations get 3 spaces)
-            if let Some(first) = streaming_lines.first_mut() {
-                first.spans.insert(0, ratatui::text::Span::raw(" • "));
+            if let Some(label) =
+                block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant)
+            {
+                out.push(ratatui::text::Line::from(format!("[{label}]")));
             }
-            for line in streaming_lines.iter_mut().skip(1) {
-                line.spans.insert(0, ratatui::text::Span::raw("   "));
+
+            // Apply gutter to streaming preview (first line carries the marker,
+            // continuation rows inherit plain padding during scrollback wrapping).
+            if let Some(first) = streaming_lines.first_mut() {
+                first.spans.insert(0, ratatui::text::Span::raw("•"));
             }
             out.extend(streaming_lines);
             out.push(ratatui::text::Line::from(""));
         }
+        out
+    }
+
+    pub(crate) fn format_stream_lines_for_terminal(
+        &self,
+        kind: StreamKind,
+        mut lines: Vec<ratatui::text::Line<'static>>,
+        include_block_label: bool,
+        include_answer_marker: bool,
+    ) -> Vec<ratatui::text::Line<'static>> {
+        if lines.is_empty() {
+            return lines;
+        }
+
+        if include_answer_marker && matches!(kind, StreamKind::Answer) {
+            if let Some(first) = lines.first_mut() {
+                let already_marked = first
+                    .spans
+                    .first()
+                    .and_then(|span| span.content.chars().next())
+                    .is_some_and(|ch| ch == '•');
+                if !already_marked {
+                    first.spans.insert(0, ratatui::text::Span::raw("•"));
+                }
+            }
+        }
+
+        let mut out: Vec<ratatui::text::Line<'static>> = Vec::new();
+        if include_block_label {
+            let cell_kind = match kind {
+                StreamKind::Answer => crate::history_cell::HistoryCellType::Assistant,
+                StreamKind::Reasoning => crate::history_cell::HistoryCellType::Reasoning,
+            };
+            if let Some(label) = block_type_label_for_cell_kind(cell_kind) {
+                out.push(ratatui::text::Line::from(format!("[{label}]")));
+            }
+        }
+
+        out.extend(lines);
         out
     }
 
@@ -30002,24 +30059,18 @@ Have we met every part of this goal and is there no further work to do?"#
         cell: &dyn crate::history_cell::HistoryCell,
     ) -> Vec<ratatui::text::Line<'static>> {
         let mut lines = self.cell_lines_for_terminal_index(idx, cell);
-        let _has_icon = cell.gutter_symbol().is_some();
-        let first_prefix = if let Some(sym) = cell.gutter_symbol() {
-            format!(" {} ", sym) // one space, icon, one space
-        } else {
-            "   ".to_string() // three spaces when no icon
-        };
         if let Some(first) = lines.first_mut() {
-            first
-                .spans
-                .insert(0, ratatui::text::Span::raw(first_prefix));
-        }
-        // For wrapped/subsequent lines, use a 3-space gutter to maintain alignment
-        if lines.len() > 1 {
-            for (_idx, line) in lines.iter_mut().enumerate().skip(1) {
-                // Always 3 spaces for continuation lines
-                line.spans.insert(0, ratatui::text::Span::raw("   "));
+            if let Some(sym) = cell.gutter_symbol() {
+                first
+                    .spans
+                    .insert(0, ratatui::text::Span::raw(sym.to_string()));
             }
         }
+
+        if let Some(label) = block_type_label_for_cell_kind(cell.kind()) {
+            lines.insert(0, ratatui::text::Line::from(format!("[{label}]")));
+        }
+
         lines.push(ratatui::text::Line::from(""));
         lines
     }
