@@ -139,7 +139,11 @@ use self::rate_limit_refresh::{
 };
 use self::history_render::{
     CachedLayout, HistoryRenderState, RenderRequest, RenderRequestKind, RenderSettings, VisibleCell,
+    block_type_header_lines,
+    block_type_label_line,
     block_type_label_for_cell_kind,
+    block_type_timestamp_for_history_id,
+    block_type_timestamp_for_record,
 };
 use code_core::parse_command::ParsedCommand;
 use code_core::{AutoDriveMode, AutoDrivePidFile};
@@ -29994,7 +29998,7 @@ Have we met every part of this goal and is there no further work to do?"#
             if let Some(label) =
                 block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant)
             {
-                out.push(styled_block_label_line(label));
+                out.extend(block_type_header_lines(label, Some(SystemTime::now()), true));
             }
 
             // Apply gutter to streaming preview (first line carries the marker,
@@ -30042,8 +30046,7 @@ Have we met every part of this goal and is there no further work to do?"#
                 StreamKind::Reasoning => crate::history_cell::HistoryCellType::Reasoning,
             };
             if let Some(label) = block_type_label_for_cell_kind(cell_kind) {
-                out.push(ratatui::text::Line::from(""));
-                out.push(styled_block_label_line(label));
+                out.extend(block_type_header_lines(label, Some(SystemTime::now()), true));
             }
         }
 
@@ -30069,10 +30072,12 @@ Have we met every part of this goal and is there no further work to do?"#
         }
 
         if let Some(label) = block_type_label_for_cell_kind(cell.kind()) {
-            if idx > 0 && !matches!(cell.kind(), crate::history_cell::HistoryCellType::User) {
-                lines.insert(0, ratatui::text::Line::from(""));
-            }
-            lines.insert(0, styled_block_label_line(label));
+            let timestamp = self
+                .history_record_for_index(idx)
+                .and_then(block_type_timestamp_for_record);
+            let mut label_lines = block_type_header_lines(label, timestamp, true);
+            label_lines.append(&mut lines);
+            lines = label_lines;
         }
         lines
     }
@@ -30900,14 +30905,61 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 }
 
-fn styled_block_label_line(label: &str) -> ratatui::text::Line<'static> {
-    let label_style = ratatui::style::Style::default()
-        .fg(crate::colors::function())
-        .add_modifier(ratatui::style::Modifier::BOLD);
-    ratatui::text::Line::from(vec![ratatui::text::Span::styled(
-        format!("[{label}]"),
-        label_style,
-    )])
+fn styled_block_label_line(
+    label: &str,
+    timestamp: Option<SystemTime>,
+) -> ratatui::text::Line<'static> {
+    block_type_label_line(label, timestamp)
+}
+
+fn render_block_label_row(
+    buf: &mut Buffer,
+    x: u16,
+    y: u16,
+    width: u16,
+    line: &ratatui::text::Line<'static>,
+    bg: ratatui::style::Color,
+) {
+    if width == 0 {
+        return;
+    }
+
+    let row_area = Rect {
+        x,
+        y,
+        width,
+        height: 1,
+    };
+    fill_rect(
+        buf,
+        row_area,
+        Some(' '),
+        Style::default().bg(bg).fg(crate::colors::text()),
+    );
+
+    let mut cursor_x = x;
+    let end_x = x.saturating_add(width);
+    for span in &line.spans {
+        if cursor_x >= end_x {
+            break;
+        }
+        let text = span.content.as_ref();
+        if text.is_empty() {
+            continue;
+        }
+
+        let mut span_style = span.style;
+        if span_style.bg.is_none() || span_style.bg == Some(ratatui::style::Color::Reset) {
+            span_style = span_style.bg(bg);
+        }
+        if span_style.fg.is_none() || span_style.fg == Some(ratatui::style::Color::Reset) {
+            span_style = span_style.fg(crate::colors::text());
+        }
+
+        buf.set_string(cursor_x, y, text, span_style);
+        let advance = UnicodeWidthStr::width(text).min(u16::MAX as usize) as u16;
+        cursor_x = cursor_x.saturating_add(advance);
+    }
 }
 
 async fn run_background_review(
@@ -41452,6 +41504,11 @@ impl WidgetRef for &ChatWidget<'_> {
                 } else {
                     None
                 };
+                let block_label_timestamp = block_label.and_then(|_| {
+                    visible_requests_slice.get(offset).and_then(|req| {
+                        block_type_timestamp_for_history_id(req.history_id, &self.history_state)
+                    })
+                });
 
                 if is_animating || has_custom {
                     tracing::debug!(
@@ -41485,11 +41542,16 @@ impl WidgetRef for &ChatWidget<'_> {
                                 } else {
                                     crate::colors::assistant_bg()
                                 };
-                                let style = Style::default()
-                                    .fg(crate::colors::function())
-                                    .bg(cell_bg)
-                                    .add_modifier(Modifier::BOLD);
-                                buf.set_string(item_area.x, item_area.y, format!("[{label}]"), style);
+                                let label_line =
+                                    styled_block_label_line(label, block_label_timestamp);
+                                render_block_label_row(
+                                    buf,
+                                    item_area.x,
+                                    item_area.y,
+                                    item_area.width,
+                                    &label_line,
+                                    cell_bg,
+                                );
                             }
                         }
                     }
@@ -41514,25 +41576,18 @@ impl WidgetRef for &ChatWidget<'_> {
                             } else {
                                 crate::colors::background()
                             };
-                            let label_style = Style::default()
-                                .fg(crate::colors::function())
-                                .bg(cell_bg)
-                                .add_modifier(Modifier::BOLD);
+                            let label_line =
+                                styled_block_label_line(label, block_label_timestamp);
 
                             if skip_rows == 0 {
-                                let label_area = Rect {
-                                    x: item_area.x,
-                                    y: item_area.y,
-                                    width: item_area.width,
-                                    height: 1,
-                                };
-                                fill_rect(
+                                render_block_label_row(
                                     buf,
-                                    label_area,
-                                    Some(' '),
-                                    Style::default().bg(cell_bg).fg(crate::colors::text()),
+                                    item_area.x,
+                                    item_area.y,
+                                    item_area.width,
+                                    &label_line,
+                                    cell_bg,
                                 );
-                                buf.set_string(item_area.x, item_area.y, format!("[{label}]"), label_style);
 
                                 let content_area = Rect {
                                     x: item_area.x,

@@ -705,26 +705,15 @@ impl<'a> RenderRequest<'a> {
         let mut out = self.build_lines_inner(history_state);
         if self.config.tui.show_block_type_labels {
             if let Some(label) = block_type_label_for_request(self.kind, self.cell) {
-                let label_style = Style::default()
-                    .fg(crate::colors::function())
-                    .add_modifier(Modifier::BOLD);
-                let mut spans = vec![Span::styled(format!("[{label}]"), label_style)];
-                if let Some(ts) = block_type_timestamp_for_request(
+                let timestamp = block_type_timestamp_for_request(
                     self.kind,
                     self.history_id,
                     self.cell,
                     history_state,
-                ) {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(
-                        format_timestamp_hhmm(ts),
-                        Style::default()
-                            .fg(crate::colors::text_dim())
-                            .add_modifier(Modifier::DIM),
-                    ));
-                }
-                let styled = Line::from(spans);
-                out.insert(0, styled);
+                );
+                let mut header_lines = block_type_header_lines(label, timestamp, false);
+                header_lines.append(&mut out);
+                out = header_lines;
             }
         }
         out
@@ -793,12 +782,22 @@ fn block_type_timestamp_for_request(
     history_state: &HistoryState,
 ) -> Option<SystemTime> {
     let _ = kind;
-    history_state
-        .record(history_id)
-        .and_then(history_record_timestamp)
+    block_type_timestamp_for_history_id(history_id, history_state)
 }
 
-fn history_record_timestamp(record: &HistoryRecord) -> Option<SystemTime> {
+pub(crate) fn block_type_timestamp_for_history_id(
+    history_id: HistoryId,
+    history_state: &HistoryState,
+) -> Option<SystemTime> {
+    if history_id == HistoryId::ZERO {
+        return None;
+    }
+    history_state
+        .record(history_id)
+        .and_then(block_type_timestamp_for_record)
+}
+
+pub(crate) fn block_type_timestamp_for_record(record: &HistoryRecord) -> Option<SystemTime> {
     match record {
         HistoryRecord::AssistantMessage(record) => Some(record.created_at),
         HistoryRecord::AssistantStream(record) => record
@@ -816,6 +815,42 @@ fn history_record_timestamp(record: &HistoryRecord) -> Option<SystemTime> {
 fn format_timestamp_hhmm(ts: SystemTime) -> String {
     let dt: DateTime<Local> = ts.into();
     dt.format("%H:%M").to_string()
+}
+
+pub(crate) fn block_type_header_lines(
+    label: &str,
+    timestamp: Option<SystemTime>,
+    include_padding: bool,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::with_capacity(if include_padding { 3 } else { 1 });
+    if include_padding {
+        lines.push(Line::from(""));
+    }
+    lines.push(block_type_label_line(label, timestamp));
+    if include_padding {
+        lines.push(Line::from(""));
+    }
+    lines
+}
+
+pub(crate) fn block_type_label_line(
+    label: &str,
+    timestamp: Option<SystemTime>,
+) -> Line<'static> {
+    let label_style = Style::default()
+        .fg(crate::colors::function())
+        .add_modifier(Modifier::BOLD);
+    let mut spans = vec![Span::styled(format!("[{label}]"), label_style)];
+    if let Some(ts) = timestamp {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            format_timestamp_hhmm(ts),
+            Style::default()
+                .fg(crate::colors::text_dim())
+                .add_modifier(Modifier::DIM),
+        ));
+    }
+    Line::from(spans)
 }
 
 fn block_type_label_for_request(
