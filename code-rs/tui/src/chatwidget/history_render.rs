@@ -847,6 +847,16 @@ pub(crate) fn block_type_header_lines(
     lines
 }
 
+pub(crate) fn block_type_header_lines_for_terminal(
+    label: &str,
+    timestamp: Option<SystemTime>,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::with_capacity(2);
+    lines.push(Line::from(""));
+    lines.push(block_type_label_line(label, timestamp));
+    lines
+}
+
 pub(crate) fn block_type_label_line(
     label: &str,
     timestamp: Option<SystemTime>,

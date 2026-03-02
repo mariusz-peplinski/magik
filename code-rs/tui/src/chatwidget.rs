@@ -141,7 +141,7 @@ use self::history_render::{
     CachedLayout, HistoryRenderState, RenderRequest, RenderRequestKind, RenderSettings, VisibleCell,
     BLOCK_TYPE_HEADER_ROWS_WITH_PADDING,
     BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING,
-    block_type_header_lines,
+    block_type_header_lines_for_terminal,
     block_type_label_line,
     block_type_label_for_cell_kind,
     block_type_timestamp_for_history_id,
@@ -30000,7 +30000,10 @@ Have we met every part of this goal and is there no further work to do?"#
             if let Some(label) =
                 block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant)
             {
-                out.extend(block_type_header_lines(label, Some(SystemTime::now()), true));
+                out.extend(block_type_header_lines_for_terminal(
+                    label,
+                    Some(SystemTime::now()),
+                ));
             }
 
             // Apply gutter to streaming preview (first line carries the marker,
@@ -30048,7 +30051,10 @@ Have we met every part of this goal and is there no further work to do?"#
                 StreamKind::Reasoning => crate::history_cell::HistoryCellType::Reasoning,
             };
             if let Some(label) = block_type_label_for_cell_kind(cell_kind) {
-                out.extend(block_type_header_lines(label, Some(SystemTime::now()), true));
+                out.extend(block_type_header_lines_for_terminal(
+                    label,
+                    Some(SystemTime::now()),
+                ));
             }
         }
 
@@ -30077,7 +30083,7 @@ Have we met every part of this goal and is there no further work to do?"#
             let timestamp = self
                 .history_record_for_index(idx)
                 .and_then(block_type_timestamp_for_record);
-            let mut label_lines = block_type_header_lines(label, timestamp, true);
+            let mut label_lines = block_type_header_lines_for_terminal(label, timestamp);
             label_lines.append(&mut lines);
             lines = label_lines;
         }
@@ -32476,6 +32482,66 @@ use code_core::protocol::OrderMeta;
             last_reviewed_commit: None,
             snapshot_epoch: None,
         }
+    }
+
+    #[test]
+    fn terminal_user_block_label_has_no_trailing_blank_line() {
+        let mut harness = ChatWidgetHarness::new();
+        let chat = harness.chat();
+        reset_history(chat);
+
+        let idx = chat.history_insert_plain_state_with_key(
+            history_cell::new_user_prompt("hello".to_string()),
+            chat.next_internal_key(),
+            "test",
+        );
+
+        let lines = chat.render_lines_for_terminal(idx, chat.history_cells[idx].as_ref());
+        let line_text = |line: &ratatui::text::Line<'_>| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+
+        assert!(line_text(&lines[0]).is_empty(), "expected leading spacer");
+        assert!(
+            line_text(&lines[1]).contains("[USER]"),
+            "expected USER block label"
+        );
+        assert!(
+            !line_text(&lines[2]).is_empty(),
+            "expected immediate content after label"
+        );
+    }
+
+    #[test]
+    fn terminal_stream_block_label_has_no_trailing_blank_line() {
+        let mut harness = ChatWidgetHarness::new();
+        let chat = harness.chat();
+
+        let lines = chat.format_stream_lines_for_terminal(
+            StreamKind::Answer,
+            vec![ratatui::text::Line::from("streaming response")],
+            true,
+            true,
+        );
+        let line_text = |line: &ratatui::text::Line<'_>| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+
+        assert!(line_text(&lines[0]).is_empty(), "expected leading spacer");
+        assert!(
+            line_text(&lines[1]).contains("[RESPONSE]"),
+            "expected RESPONSE block label"
+        );
+        assert!(
+            line_text(&lines[2]).starts_with('•'),
+            "expected response content immediately after label"
+        );
     }
 
     #[allow(dead_code)]
