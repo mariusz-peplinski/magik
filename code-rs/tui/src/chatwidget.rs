@@ -139,6 +139,8 @@ use self::rate_limit_refresh::{
 };
 use self::history_render::{
     CachedLayout, HistoryRenderState, RenderRequest, RenderRequestKind, RenderSettings, VisibleCell,
+    BLOCK_TYPE_HEADER_ROWS_WITH_PADDING,
+    BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING,
     block_type_header_lines,
     block_type_label_line,
     block_type_label_for_cell_kind,
@@ -41222,7 +41224,14 @@ impl WidgetRef for &ChatWidget<'_> {
                                 && fresh > 0
                                 && block_type_label_for_cell_kind(item.kind()).is_some()
                             {
-                                fresh = fresh.saturating_add(1);
+                                let extra_rows = if item.kind()
+                                    == crate::history_cell::HistoryCellType::Assistant
+                                {
+                                    BLOCK_TYPE_HEADER_ROWS_WITH_PADDING.saturating_sub(1)
+                                } else {
+                                    BLOCK_TYPE_HEADER_ROWS_WITH_PADDING
+                                };
+                                fresh = fresh.saturating_add(extra_rows);
                             }
                             if fresh != item_height {
                                 if preview.is_none() {
@@ -41526,33 +41535,65 @@ impl WidgetRef for &ChatWidget<'_> {
                         .cell
                         .and_then(|c| c.as_any().downcast_ref::<crate::history_cell::AssistantMarkdownCell>())
                     {
-                        if skip_rows < plan.total_rows() && item_area.height > 0 {
-                            assistant.render_with_layout(plan.as_ref(), item_area, buf, skip_rows);
-                        }
                         handled_assistant = true;
                         layout_for_render = None;
 
                         if let Some(label) = block_label {
-                            // AssistantMarkdownCell already reserves a blank top padding row (when
-                            // visible) for alignment; reuse it for the block label without changing
-                            // the overall height.
-                            if skip_rows == 0 && item_area.height > 1 && item_area.width > 0 {
-                                let cell_bg = if assistant.state().mid_turn {
-                                    crate::colors::assistant_mid_turn_bg()
-                                } else {
-                                    crate::colors::assistant_bg()
-                                };
-                                let label_line =
-                                    styled_block_label_line(label, block_label_timestamp);
-                                render_block_label_row(
+                            let cell_bg = if assistant.state().mid_turn {
+                                crate::colors::assistant_mid_turn_bg()
+                            } else {
+                                crate::colors::assistant_bg()
+                            };
+
+                            // Keep assistant tint continuous across the injected label header rows.
+                            fill_rect(
+                                buf,
+                                item_area,
+                                Some(' '),
+                                Style::default().bg(cell_bg),
+                            );
+
+                            if skip_rows <= BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING
+                                && item_area.width > 0
+                            {
+                                let label_y = item_area.y.saturating_add(
+                                    BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING.saturating_sub(skip_rows),
+                                );
+                                if label_y < item_area.y.saturating_add(item_area.height) {
+                                    let label_line =
+                                        styled_block_label_line(label, block_label_timestamp);
+                                    render_block_label_row(
+                                        buf,
+                                        item_area.x,
+                                        label_y,
+                                        item_area.width,
+                                        &label_line,
+                                        cell_bg,
+                                    );
+                                }
+                            }
+
+                            let content_skip =
+                                skip_rows.saturating_sub(BLOCK_TYPE_HEADER_ROWS_WITH_PADDING);
+                            let assistant_skip = content_skip.saturating_add(1);
+                            let header_rows_visible =
+                                BLOCK_TYPE_HEADER_ROWS_WITH_PADDING.saturating_sub(skip_rows);
+                            let content_area = Rect {
+                                x: item_area.x,
+                                y: item_area.y.saturating_add(header_rows_visible),
+                                width: item_area.width,
+                                height: item_area.height.saturating_sub(header_rows_visible),
+                            };
+                            if content_area.height > 0 && assistant_skip < plan.total_rows() {
+                                assistant.render_with_layout(
+                                    plan.as_ref(),
+                                    content_area,
                                     buf,
-                                    item_area.x,
-                                    item_area.y,
-                                    item_area.width,
-                                    &label_line,
-                                    cell_bg,
+                                    assistant_skip,
                                 );
                             }
+                        } else if skip_rows < plan.total_rows() && item_area.height > 0 {
+                            assistant.render_with_layout(plan.as_ref(), item_area, buf, skip_rows);
                         }
                     }
                 }
@@ -41569,7 +41610,6 @@ impl WidgetRef for &ChatWidget<'_> {
                     } else {
                         if let Some(label) = block_label
                             && has_custom
-                            && item_area.width > 0
                         {
                             let cell_bg = if is_auto_review {
                                 crate::history_cell::PlainHistoryCell::auto_review_bg()
@@ -41579,27 +41619,50 @@ impl WidgetRef for &ChatWidget<'_> {
                             let label_line =
                                 styled_block_label_line(label, block_label_timestamp);
 
-                            if skip_rows == 0 {
-                                render_block_label_row(
+                            let header_rows_visible =
+                                BLOCK_TYPE_HEADER_ROWS_WITH_PADDING.saturating_sub(skip_rows);
+                            if header_rows_visible > 0 && item_area.width > 0 {
+                                let header_area = Rect {
+                                    x: item_area.x,
+                                    y: item_area.y,
+                                    width: item_area.width,
+                                    height: header_rows_visible.min(item_area.height),
+                                };
+                                fill_rect(
                                     buf,
-                                    item_area.x,
-                                    item_area.y,
-                                    item_area.width,
-                                    &label_line,
-                                    cell_bg,
+                                    header_area,
+                                    Some(' '),
+                                    Style::default().bg(cell_bg),
                                 );
 
-                                let content_area = Rect {
-                                    x: item_area.x,
-                                    y: item_area.y.saturating_add(1),
-                                    width: item_area.width,
-                                    height: item_area.height.saturating_sub(1),
-                                };
-                                if content_area.height > 0 {
-                                    item.render_with_skip(content_area, buf, 0);
+                                if skip_rows <= BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING {
+                                    let label_y = item_area.y.saturating_add(
+                                        BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING
+                                            .saturating_sub(skip_rows),
+                                    );
+                                    if label_y < item_area.y.saturating_add(item_area.height) {
+                                        render_block_label_row(
+                                            buf,
+                                            item_area.x,
+                                            label_y,
+                                            item_area.width,
+                                            &label_line,
+                                            cell_bg,
+                                        );
+                                    }
                                 }
-                            } else {
-                                item.render_with_skip(item_area, buf, skip_rows.saturating_sub(1));
+                            }
+
+                            let content_skip =
+                                skip_rows.saturating_sub(BLOCK_TYPE_HEADER_ROWS_WITH_PADDING);
+                            let content_area = Rect {
+                                x: item_area.x,
+                                y: item_area.y.saturating_add(header_rows_visible),
+                                width: item_area.width,
+                                height: item_area.height.saturating_sub(header_rows_visible),
+                            };
+                            if content_area.height > 0 {
+                                item.render_with_skip(content_area, buf, content_skip);
                             }
                         } else {
                             item.render_with_skip(item_area, buf, skip_rows);

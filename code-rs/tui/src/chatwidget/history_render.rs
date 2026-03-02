@@ -33,6 +33,9 @@ use crate::insert_history::word_wrap_lines;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+pub(crate) const BLOCK_TYPE_HEADER_ROWS_WITH_PADDING: u16 = 3;
+pub(crate) const BLOCK_TYPE_LABEL_ROW_OFFSET_WITH_PADDING: u16 = 1;
+
 /// Memoized layout data for history rendering.
 pub(crate) struct HistoryRenderState {
     pub(crate) layout_cache: RefCell<HashMap<CacheKey, Rc<CachedLayout>>>,
@@ -486,7 +489,14 @@ impl HistoryRenderState {
                         .and_then(|cell| block_type_label_for_cell_kind(cell.kind()))
                         .is_some()
                 {
-                    height.saturating_add(1)
+                    let extra_rows = req
+                        .cell
+                        .filter(|cell| cell.kind() == HistoryCellType::Assistant)
+                        .map_or(
+                            BLOCK_TYPE_HEADER_ROWS_WITH_PADDING,
+                            |_| BLOCK_TYPE_HEADER_ROWS_WITH_PADDING.saturating_sub(1),
+                        );
+                    height.saturating_add(extra_rows)
                 } else {
                     height
                 };
@@ -711,7 +721,7 @@ impl<'a> RenderRequest<'a> {
                     self.cell,
                     history_state,
                 );
-                let mut header_lines = block_type_header_lines(label, timestamp, false);
+                let mut header_lines = block_type_header_lines(label, timestamp, true);
                 header_lines.append(&mut out);
                 out = header_lines;
             }
@@ -822,7 +832,11 @@ pub(crate) fn block_type_header_lines(
     timestamp: Option<SystemTime>,
     include_padding: bool,
 ) -> Vec<Line<'static>> {
-    let mut lines = Vec::with_capacity(if include_padding { 3 } else { 1 });
+    let mut lines = Vec::with_capacity(if include_padding {
+        BLOCK_TYPE_HEADER_ROWS_WITH_PADDING as usize
+    } else {
+        1
+    });
     if include_padding {
         lines.push(Line::from(""));
     }
@@ -845,9 +859,7 @@ pub(crate) fn block_type_label_line(
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             format_timestamp_hhmm(ts),
-            Style::default()
-                .fg(crate::colors::text_dim())
-                .add_modifier(Modifier::DIM),
+            Style::default().fg(crate::colors::text_dim()),
         ));
     }
     Line::from(spans)
