@@ -14,6 +14,7 @@ use signal_hook::flag;
 
 use code_core::config::Config;
 use code_core::ConversationManager;
+use code_core::auth_accounts;
 use code_login::{AuthManager, AuthMode};
 use code_protocol::protocol::SessionSource;
 
@@ -42,6 +43,11 @@ impl App<'_> {
         startup_footer_notice: Option<String>,
         latest_upgrade_version: Option<String>,
     ) -> Self {
+        let session_account_override = auth_accounts::get_persisted_active_account_id(&config.code_home)
+            .ok()
+            .flatten();
+        auth_accounts::set_session_account_override(session_account_override);
+
         let auth_manager = AuthManager::shared_with_mode_and_originator(
             config.code_home.clone(),
             AuthMode::ApiKey,

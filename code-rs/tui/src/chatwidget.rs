@@ -15670,9 +15670,6 @@ impl ChatWidget<'_> {
     }
 
     fn refresh_terminal_footer_meta(&mut self) {
-        if !self.standard_terminal_mode {
-            return;
-        }
         self.bottom_pane
             .set_terminal_footer_meta(self.build_terminal_footer_meta());
     }
@@ -29997,14 +29994,12 @@ Have we met every part of this goal and is there no further work to do?"#
             .map(|r| ratatui::text::Line::from(r.text))
             .collect::<Vec<_>>();
         if !streaming_lines.is_empty() {
-            if let Some(label) =
-                block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant)
-            {
-                out.extend(block_type_header_lines_for_terminal(
-                    label,
-                    Some(SystemTime::now()),
-                ));
-            }
+            let label =
+                terminal_block_type_label_for_cell_kind(crate::history_cell::HistoryCellType::Assistant);
+            out.extend(block_type_header_lines_for_terminal(
+                label,
+                Some(SystemTime::now()),
+            ));
 
             // Apply gutter to streaming preview (first line carries the marker,
             // continuation rows inherit plain padding during scrollback wrapping).
@@ -30019,6 +30014,12 @@ Have we met every part of this goal and is there no further work to do?"#
     // Block label rows intentionally use theme colors even in standard-terminal
     // mode so they remain visually distinct when mirroring history into native
     // scrollback.
+
+    fn terminal_block_type_label_for_kind(
+        kind: crate::history_cell::HistoryCellType,
+    ) -> &'static str {
+        terminal_block_type_label_for_cell_kind(kind)
+    }
 
     pub(crate) fn format_stream_lines_for_terminal(
         &self,
@@ -30050,12 +30051,11 @@ Have we met every part of this goal and is there no further work to do?"#
                 StreamKind::Answer => crate::history_cell::HistoryCellType::Assistant,
                 StreamKind::Reasoning => crate::history_cell::HistoryCellType::Reasoning,
             };
-            if let Some(label) = block_type_label_for_cell_kind(cell_kind) {
-                out.extend(block_type_header_lines_for_terminal(
-                    label,
-                    Some(SystemTime::now()),
-                ));
-            }
+            let label = Self::terminal_block_type_label_for_kind(cell_kind);
+            out.extend(block_type_header_lines_for_terminal(
+                label,
+                Some(SystemTime::now()),
+            ));
         }
 
         out.extend(lines);
@@ -30079,14 +30079,14 @@ Have we met every part of this goal and is there no further work to do?"#
             }
         }
 
-        if let Some(label) = block_type_label_for_cell_kind(cell.kind()) {
-            let timestamp = self
-                .history_record_for_index(idx)
-                .and_then(block_type_timestamp_for_record);
-            let mut label_lines = block_type_header_lines_for_terminal(label, timestamp);
-            label_lines.append(&mut lines);
-            lines = label_lines;
-        }
+        let label = Self::terminal_block_type_label_for_kind(cell.kind());
+        let timestamp = self
+            .history_record_for_index(idx)
+            .and_then(block_type_timestamp_for_record)
+            .or(Some(SystemTime::now()));
+        let mut label_lines = block_type_header_lines_for_terminal(label, timestamp);
+        label_lines.append(&mut lines);
+        lines = label_lines;
         lines
     }
 
@@ -30913,6 +30913,17 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 }
 
+fn terminal_block_type_label_for_cell_kind(
+    kind: crate::history_cell::HistoryCellType,
+) -> &'static str {
+    block_type_label_for_cell_kind(kind).unwrap_or(match kind {
+        crate::history_cell::HistoryCellType::Plain => "MESSAGE",
+        crate::history_cell::HistoryCellType::AnimatedWelcome => "WELCOME",
+        crate::history_cell::HistoryCellType::Loading => "STATUS",
+        _ => "MESSAGE",
+    })
+}
+
 fn styled_block_label_line(
     label: &str,
     timestamp: Option<SystemTime>,
@@ -31464,6 +31475,70 @@ use code_core::protocol::OrderMeta;
         let mut harness = ChatWidgetHarness::new();
         let formatted = harness.chat().format_model_name("gpt-5.1-codex-mini");
         assert_eq!(formatted, "GPT-5.1-Codex-Mini");
+    }
+
+    #[test]
+    fn terminal_block_labels_cover_loading_and_plain_cells() {
+        assert_eq!(
+            terminal_block_type_label_for_cell_kind(HistoryCellType::Loading),
+            "STATUS"
+        );
+        assert_eq!(
+            terminal_block_type_label_for_cell_kind(HistoryCellType::Plain),
+            "MESSAGE"
+        );
+    }
+
+    #[test]
+    fn terminal_block_header_has_leading_padding_only() {
+        let lines = block_type_header_lines_for_terminal("USER", Some(SystemTime::UNIX_EPOCH));
+        assert_eq!(lines.len(), 2, "header should only add one leading blank line");
+
+        let first_line: String = lines[0]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(first_line.is_empty(), "first line should be blank padding");
+    }
+
+    #[test]
+    fn terminal_render_lines_include_timestamp_for_plain_records() {
+        let mut harness = ChatWidgetHarness::new();
+        let chat = harness.chat();
+        reset_history(chat);
+
+        chat.history_push_plain_state(history_cell::new_user_prompt("hello".to_string()));
+        let idx = chat.history_cells.len().saturating_sub(1);
+        let lines = chat.render_lines_for_terminal(idx, chat.history_cells[idx].as_ref());
+
+        let header_text: String = lines[1]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(header_text.contains("[USER]"));
+
+        let timestamp = header_text
+            .split_whitespace()
+            .last()
+            .expect("header should include timestamp");
+        assert_eq!(timestamp.len(), 5);
+        assert_eq!(timestamp.chars().nth(2), Some(':'));
+        assert!(timestamp
+            .chars()
+            .enumerate()
+            .all(|(idx, ch)| idx == 2 || ch.is_ascii_digit()));
+
+        let body_line: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            !body_line.is_empty(),
+            "body should follow immediately after header without an extra blank row"
+        );
     }
 
     #[test]

@@ -2371,7 +2371,12 @@ impl ChatComposer {
             ], true));
         }
 
-        right_sections.push((3, Self::shortcut_action_spans("ui", "t", label_style, key_hint_style), true));
+        let screen_toggle_label = if self.standard_terminal_mode {
+            "ui"
+        } else {
+            "term"
+        };
+        right_sections.push((3, Self::shortcut_action_spans(screen_toggle_label, "t", label_style, key_hint_style), true));
         right_sections.push((4, Self::shortcut_action_spans("edit", "g", label_style, key_hint_style), true));
         right_sections.push((4, Self::shortcut_action_spans("yoink", "o", label_style, key_hint_style), true));
         right_sections.push((5, Self::shortcut_action_spans("clear", "l", label_style, key_hint_style), true));
@@ -2628,7 +2633,7 @@ impl ChatComposer {
                 let key_hint_style = Style::default().fg(crate::colors::function());
                 let label_style = Style::default().fg(crate::colors::text_dim());
 
-                if self.standard_terminal_mode && !self.auto_drive_active {
+                if !self.auto_drive_active {
                     self.render_standard_terminal_footer(area, buf, key_hint_style, label_style);
                     return;
                 }
@@ -3436,5 +3441,42 @@ mod tests {
         let esc_idx = line.find("Esc stop").unwrap_or(line.len());
 
         assert!(auto_idx < esc_idx, "Auto Review status should be left-most");
+    }
+
+    #[test]
+    fn ui_mode_uses_terminal_style_footer_metadata() {
+        let (tx, _rx) = std::sync::mpsc::channel::<AppEvent>();
+        let app_tx = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(true, app_tx, true, false, None);
+
+        composer.set_standard_terminal_mode(false);
+        composer.auto_drive_active = false;
+        composer.set_terminal_footer_meta(TerminalFooterMeta {
+            model: "gpt-5.2".to_string(),
+            reasoning: "high".to_string(),
+            cwd: "~/repo/".to_string(),
+            branch: Some("main".to_string()),
+            account_label: Some("user".to_string()),
+            usage_icon: Some('◔'),
+            hourly_percent: Some(12),
+            weekly_percent: Some(44),
+        });
+
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 1,
+        };
+        let mut buf = Buffer::empty(area);
+        composer.render_footer(area, &mut buf);
+
+        let line: String = (0..area.width)
+            .map(|x| buf[(area.x + x, area.y)].symbol().to_string())
+            .collect();
+
+        assert!(line.contains("model: gpt-5.2"));
+        assert!(line.contains("high"));
+        assert!(line.contains("~/repo/"));
     }
 }

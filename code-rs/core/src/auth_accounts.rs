@@ -261,6 +261,14 @@ pub fn list_accounts(code_home: &Path) -> io::Result<Vec<StoredAccount>> {
 }
 
 pub fn get_active_account_id(code_home: &Path) -> io::Result<Option<String>> {
+    if let Some(session_override) = session_account_override() {
+        return Ok(Some(session_override));
+    }
+
+    get_persisted_active_account_id(code_home)
+}
+
+pub fn get_persisted_active_account_id(code_home: &Path) -> io::Result<Option<String>> {
     let path = accounts_file_path(code_home);
     let data = read_accounts_file(&path)?;
     Ok(data.active_account_id)
@@ -622,6 +630,33 @@ mod tests {
 
         let active_after = get_active_account_id(home.path()).expect("active id");
         assert!(active_after.is_none());
+
+        let persisted_after =
+            get_persisted_active_account_id(home.path()).expect("persisted active id");
+        assert!(persisted_after.is_none());
+    }
+
+    #[test]
+    fn get_active_account_id_prefers_session_override() {
+        let home = tempdir().expect("tempdir");
+        let stored = upsert_api_key_account(
+            home.path(),
+            "sk-test".to_string(),
+            None,
+            true,
+        )
+        .expect("insert account");
+
+        set_session_account_override(Some("session-account".to_string()));
+
+        let active = get_active_account_id(home.path()).expect("active id");
+        assert_eq!(active.as_deref(), Some("session-account"));
+
+        let persisted =
+            get_persisted_active_account_id(home.path()).expect("persisted active id");
+        assert_eq!(persisted.as_deref(), Some(stored.id.as_str()));
+
+        set_session_account_override(None);
     }
 
     #[test]

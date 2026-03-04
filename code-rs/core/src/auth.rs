@@ -416,12 +416,13 @@ pub fn login_with_api_key(code_home: &Path, api_key: &str) -> std::io::Result<()
         last_refresh: None,
     };
     write_auth_json(&get_auth_file(code_home), &auth_dot_json)?;
-    let _ = crate::auth_accounts::upsert_api_key_account(
+    let stored = crate::auth_accounts::upsert_api_key_account(
         code_home,
         api_key.to_string(),
         None,
         true,
     )?;
+    crate::auth_accounts::set_session_account_override(Some(stored.id));
     Ok(())
 }
 
@@ -461,13 +462,14 @@ pub fn login_with_chatgpt_auth_tokens(
     write_auth_json(&get_auth_file(code_home), &auth_dot_json)?;
 
     let email_for_store = tokens.id_token.email.clone();
-    let _ = crate::auth_accounts::upsert_chatgpt_account(
+    let stored = crate::auth_accounts::upsert_chatgpt_account(
         code_home,
         tokens,
         last_refresh,
         email_for_store,
         true,
     )?;
+    crate::auth_accounts::set_session_account_override(Some(stored.id));
 
     Ok(())
 }
@@ -595,8 +597,74 @@ pub fn activate_account(code_home: &Path, account_id: &str) -> std::io::Result<(
         }
     }
 
-    let _ = crate::auth_accounts::set_active_account_id(code_home, Some(account_id_owned))?;
+    let _ = crate::auth_accounts::set_active_account_id(code_home, Some(account_id_owned.clone()))?;
+    crate::auth_accounts::set_session_account_override(Some(account_id_owned));
     Ok(())
+}
+
+fn codex_auth_from_stored_account(
+    code_home: &Path,
+    account: &crate::auth_accounts::StoredAccount,
+    originator: &str,
+) -> std::io::Result<CodexAuth> {
+    match account.mode {
+        AuthMode::ApiKey => {
+            let api_key = account.openai_api_key.clone().ok_or_else(|| {
+                std::io::Error::other("stored API key account is missing the key value")
+            })?;
+            Ok(CodexAuth::from_api_key_with_client(
+                &api_key,
+                crate::default_client::create_client(originator),
+            ))
+        }
+        AuthMode::ChatGPT | AuthMode::ChatgptAuthTokens => {
+            let tokens = account.tokens.clone().ok_or_else(|| {
+                std::io::Error::other("stored ChatGPT account is missing token data")
+            })?;
+            let auth_dot_json = AuthDotJson {
+                auth_mode: Some(account.mode),
+                openai_api_key: None,
+                tokens: Some(tokens),
+                last_refresh: account.last_refresh,
+            };
+
+            Ok(CodexAuth {
+                api_key: None,
+                mode: account.mode,
+                auth_dot_json: Arc::new(Mutex::new(Some(auth_dot_json))),
+                auth_file: get_auth_file(code_home),
+                client: crate::default_client::create_client(originator),
+            })
+        }
+    }
+}
+
+fn load_auth_with_session_override(
+    code_home: &Path,
+    preferred_auth_method: AuthMode,
+    originator: &str,
+    include_env_var: bool,
+) -> std::io::Result<Option<CodexAuth>> {
+    if let Some(session_account_id) = crate::auth_accounts::session_account_override() {
+        match crate::auth_accounts::find_account(code_home, &session_account_id)? {
+            Some(account) => {
+                return codex_auth_from_stored_account(code_home, &account, originator).map(Some);
+            }
+            None => {
+                tracing::warn!(
+                    account_id = %session_account_id,
+                    "session account override missing from account store; falling back to auth.json"
+                );
+            }
+        }
+    }
+
+    load_auth(
+        code_home,
+        include_env_var,
+        preferred_auth_method,
+        originator,
+    )
 }
 
 fn load_auth(
@@ -1214,6 +1282,35 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn load_auth_with_session_override_prefers_stored_account() {
+        let dir = tempdir().expect("tempdir");
+        login_with_api_key(dir.path(), "sk-global").expect("write global auth");
+
+        let override_account = crate::auth_accounts::upsert_api_key_account(
+            dir.path(),
+            "sk-session".to_string(),
+            None,
+            false,
+        )
+        .expect("insert override account");
+
+        crate::auth_accounts::set_session_account_override(Some(override_account.id.clone()));
+        let auth = load_auth_with_session_override(
+            dir.path(),
+            AuthMode::ApiKey,
+            "code_cli_rs",
+            true,
+        )
+        .expect("load auth")
+        .expect("auth should exist");
+
+        assert_eq!(auth.mode, AuthMode::ApiKey);
+        assert_eq!(auth.api_key.as_deref(), Some("sk-session"));
+
+        crate::auth_accounts::set_session_account_override(None);
+    }
+
     fn assert_permanent(body: &str, status: StatusCode) {
         let err = classify_refresh_failure(status, body);
         assert!(err.is_permanent(), "expected permanent error, got {:?}", err.kind);
@@ -1421,7 +1518,7 @@ impl AuthManager {
             effective_mode = AuthMode::ApiKey;
             Some(CodexAuth::from_api_key(&api_key))
         } else {
-            CodexAuth::from_code_home(&code_home, preferred_auth_mode, &originator)
+            load_auth_with_session_override(&code_home, preferred_auth_mode, &originator, true)
                 .ok()
                 .flatten()
         };
@@ -1492,7 +1589,7 @@ impl AuthManager {
             None
         };
         let new_auth = env_auth.clone().or_else(|| {
-            CodexAuth::from_code_home(&self.code_home, preferred, &self.originator)
+            load_auth_with_session_override(&self.code_home, preferred, &self.originator, true)
                 .ok()
                 .flatten()
         });
