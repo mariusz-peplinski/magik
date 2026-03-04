@@ -826,7 +826,10 @@ fn sections_to_ratatui_lines(
                     }
                     out.push(Line::from(line_spans));
                 }
-                ReasoningBlock::Separator => out.push(Line::from(String::new())),
+                // Keep reasoning text compact: separators are useful as parse
+                // boundaries, but rendering a blank row for each one makes
+                // streamed thoughts look double-spaced.
+                ReasoningBlock::Separator => {}
             }
         }
     }
@@ -969,4 +972,35 @@ fn debug_title_overlay(lines: &[Line<'static>]) -> String {
         "rtitles={} idx={:?} total_lines={} lastw={} prevs={:?}",
         titles, title_idxs, total, lastw, title_previews
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expanded_reasoning_compacts_paragraph_spacing() {
+        let cell = CollapsibleReasoningCell::new_with_id(
+            vec![
+                Line::from("First thought"),
+                Line::from(""),
+                Line::from("Second thought"),
+            ],
+            Some("reasoning-1".to_string()),
+        );
+        cell.set_collapsed(false);
+
+        let lines = cell.display_lines();
+        let rendered = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, vec!["First thought", "Second thought"]);
+    }
 }

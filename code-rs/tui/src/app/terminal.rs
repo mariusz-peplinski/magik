@@ -516,6 +516,11 @@ impl App<'_> {
             );
             self.alt_screen_active = false;
             self.standard_terminal_stream_prefixes.clear();
+            // Force the first standard-mode transcript mirror to use plain
+            // append behavior. Reusing an alt-screen frame size here can
+            // over-reserve rows and leave the terminal looking blank until a
+            // later full re-render.
+            self.last_frame_size = None;
             // Persist preference
             let _ = code_core::config::set_tui_alternate_screen(&self.config.code_home, false);
             // Immediately mirror the entire transcript into the terminal scrollback so

@@ -32565,9 +32565,10 @@ use code_core::protocol::OrderMeta;
         let chat = harness.chat();
         reset_history(chat);
 
+        let key = chat.next_internal_key();
         let idx = chat.history_insert_plain_state_with_key(
             history_cell::new_user_prompt("hello".to_string()),
-            chat.next_internal_key(),
+            key,
             "test",
         );
 
